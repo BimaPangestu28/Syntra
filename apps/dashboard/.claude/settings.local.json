@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(tree:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npx vitest:*)",
+      "Bash(npx tsup)",
+      "Bash(for f in syntra/scope.py syntra/types.py syntra/breadcrumbs/buffer.py syntra/transport/http.py syntra/client.py)",
+      "Bash(do sed -i 's/from datetime import datetime$/from datetime import datetime, timezone/' \"$f\")",
+      "Bash(done)",
+      "Bash(xargs:*)"
+    ]
+  }
+}

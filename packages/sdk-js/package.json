@@ -1,0 +1,65 @@
+{
+  "name": "@syntra/sdk",
+  "version": "0.1.0",
+  "description": "Syntra SDK for JavaScript/TypeScript - Error tracking, tracing, and observability",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    },
+    "./nextjs": {
+      "types": "./dist/frameworks/nextjs/index.d.ts",
+      "import": "./dist/frameworks/nextjs/index.mjs",
+      "require": "./dist/frameworks/nextjs/index.js"
+    },
+    "./express": {
+      "types": "./dist/frameworks/express/index.d.ts",
+      "import": "./dist/frameworks/express/index.mjs",
+      "require": "./dist/frameworks/express/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest",
+    "test:coverage": "vitest --coverage",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist",
+    "lint": "eslint src --ext .ts,.tsx"
+  },
+  "keywords": [
+    "syntra",
+    "error-tracking",
+    "tracing",
+    "observability",
+    "apm",
+    "monitoring"
+  ],
+  "license": "MIT",
+  "dependencies": {},
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^20.10.0",
+    "@types/react": "^18.2.0",
+    "next": "^14.0.0",
+    "react": "^18.2.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.3.0",
+    "vitest": "^1.2.0"
+  },
+  "peerDependencies": {
+    "react": ">=17.0.0"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    }
+  }
+}

@@ -1,0 +1,117 @@
+version: '3.8'
+
+services:
+  # PostgreSQL - Primary database
+  postgres:
+    image: postgres:16-alpine
+    container_name: syntra-postgres
+    environment:
+      POSTGRES_USER: syntra
+      POSTGRES_PASSWORD: syntra_dev_password
+      POSTGRES_DB: syntra
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-scripts/postgres:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U syntra"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # Redis - Cache and job queue
+  redis:
+    image: redis:7-alpine
+    container_name: syntra-redis
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ClickHouse - Telemetry storage
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.1
+    container_name: syntra-clickhouse
+    environment:
+      CLICKHOUSE_USER: syntra
+      CLICKHOUSE_PASSWORD: syntra_dev_password
+      CLICKHOUSE_DB: syntra_telemetry
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
+    ports:
+      - "8123:8123"   # HTTP interface
+      - "9000:9000"   # Native interface
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+      - ./init-scripts/clickhouse:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD", "clickhouse-client", "--query", "SELECT 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # Docker Registry - Private image storage
+  registry:
+    image: registry:2
+    container_name: syntra-registry
+    ports:
+      - "5000:5000"
+    volumes:
+      - registry_data:/var/lib/registry
+    environment:
+      REGISTRY_STORAGE_DELETE_ENABLED: "true"
+    restart: unless-stopped
+
+  # Traefik - Reverse proxy for local testing
+  traefik:
+    image: traefik:v3.0
+    container_name: syntra-traefik
+    command:
+      - "--api.insecure=true"
+      - "--api.dashboard=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--providers.docker.network=syntra-network"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--log.level=INFO"
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8080:8080"   # Traefik Dashboard
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - traefik_certs:/etc/traefik/certs
+    networks:
+      - default
+    restart: unless-stopped
+
+  # Mailhog - Email testing
+  mailhog:
+    image: mailhog/mailhog
+    container_name: syntra-mailhog
+    ports:
+      - "1025:1025"   # SMTP
+      - "8025:8025"   # Web UI
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
+  clickhouse_data:
+  registry_data:
+  traefik_certs:
+
+networks:
+  default:
+    name: syntra-network
+    driver: bridge

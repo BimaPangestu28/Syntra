@@ -1,0 +1,77 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+dist/
+build/
+.next/
+out/
+target/
+
+# Environment
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Testing
+coverage/
+.nyc_output/
+
+# Turbo
+.turbo/
+
+# Rust
+Cargo.lock
+*.rs.bk
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+.venv/
+venv/
+ENV/
+.eggs/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Docker
+.docker/
+
+# Temporary
+tmp/
+temp/
+*.tmp
+*.temp
+
+# Secrets (never commit)
+*.pem
+*.key
+secrets/
+credentials/
+
+# Database
+*.sqlite
+*.db
+
+# OS
+Thumbs.db
+.DS_Store

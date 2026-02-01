@@ -1,0 +1,39 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: syntra-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: syntra
+      POSTGRES_PASSWORD: syntra_secret_2024
+      POSTGRES_DB: syntra
+    ports:
+      - "5433:5432"
+    volumes:
+      - syntra_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U syntra -d syntra"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: syntra-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    ports:
+      - "6380:6379"
+    volumes:
+      - syntra_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  syntra_postgres_data:
+  syntra_redis_data:

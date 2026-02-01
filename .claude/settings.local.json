@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(chmod:*)",
+      "Bash(npx tsc:*)",
+      "Bash(source .env.local:*)",
+      "Bash(lsof:*)",
+      "Bash(cd:*)",
+      "Bash(test:*)",
+      "Bash(npx next lint:*)",
+      "Bash(npx --yes tsc:*)"
+    ]
+  }
+}

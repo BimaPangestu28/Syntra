@@ -1,0 +1,38 @@
+# Syntra Agent Development Configuration
+
+# Agent identification
+agent_id = "dev-agent-001"
+server_id = "dev-server"
+
+# Control plane connection settings
+[control_plane]
+url = "ws://localhost:8080"
+# api_key = "your-api-key-here"
+reconnect_interval_ms = 5000
+max_reconnect_attempts = 0  # 0 = infinite
+heartbeat_interval_secs = 30
+
+# Runtime configuration
+[runtime]
+runtime_type = "docker"
+docker_socket = "/var/run/docker.sock"
+default_network = "syntra-network"
+
+[runtime.resource_limits]
+max_memory_mb = 4096
+max_cpu_cores = 4.0
+max_containers = 50
+
+# Telemetry settings
+[telemetry]
+enabled = true
+metrics_interval_secs = 15
+detailed_metrics = true
+
+# Logging configuration
+[logging]
+level = "debug"
+format = "pretty"
+# file = "/var/log/syntra-agent/agent.log"
+rotate = false
+max_size_mb = 100
