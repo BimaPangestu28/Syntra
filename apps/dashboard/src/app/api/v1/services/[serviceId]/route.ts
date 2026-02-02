@@ -4,6 +4,7 @@ import { services, projects, organizationMembers } from '@/lib/db/schema';
 import { eq, and } from 'drizzle-orm';
 import { auth } from '@/lib/auth';
 import { checkPermission } from '@/lib/auth/require-permission';
+import { agentHub } from '@/lib/agent/hub';
 import crypto from 'crypto';
 import { z } from 'zod';
 
@@ -345,7 +346,17 @@ export async function DELETE(
       );
     }
 
-    // TODO: Send stop command to agent if service is running
+    // Send stop command to agent if server is connected
+    if (service.serverId && agentHub.isAgentConnected(service.serverId)) {
+      try {
+        await agentHub.sendCommand(service.serverId, 'stop', {
+          service_id: service.id,
+          reason: 'service_deleted',
+        });
+      } catch (err) {
+        console.warn(`[API] Failed to send stop command for service ${service.id}:`, err);
+      }
+    }
 
     await db.delete(services).where(eq(services.id, params.serviceId));
 

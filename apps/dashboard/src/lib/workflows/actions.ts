@@ -3,6 +3,7 @@ import { services, deployments, servers, promotions } from '@/lib/db/schema';
 import { eq, desc } from 'drizzle-orm';
 import { queueNotification, queueDeployment } from '@/lib/queue';
 import { agentHub } from '@/lib/agent/hub';
+import { generateSuggestions } from '@/lib/ai/suggestions';
 
 export type ActionType = 'notify' | 'scale' | 'restart' | 'rollback' | 'run_command' | 'ai_analyze' | 'approval';
 
@@ -255,9 +256,22 @@ async function executeAiAnalyzeAction(
   config: Record<string, unknown>,
   context: WorkflowContext
 ): Promise<ActionResult> {
-  // TODO: Implement AI analysis integration
-  console.log('[Workflow] AI analyze action triggered:', config, context);
-  return { message: 'AI analysis queued' };
+  const serviceId = (config.service_id as string) || context.serviceId;
+  if (!serviceId) throw new Error('service_id is required for ai_analyze action');
+
+  const service = await db.query.services.findFirst({
+    where: eq(services.id, serviceId),
+    with: { project: true },
+  });
+
+  if (!service) throw new Error(`Service ${serviceId} not found`);
+
+  const count = await generateSuggestions(serviceId, service.project.orgId);
+
+  return {
+    message: `AI analysis complete: ${count} suggestions generated`,
+    data: { serviceId, suggestionCount: count },
+  };
 }
 
 /**

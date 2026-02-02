@@ -15,8 +15,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/db';
-import { services } from '@/lib/db/schema';
-import { eq, inArray } from 'drizzle-orm';
+import { services, organizationMembers, projects } from '@/lib/db/schema';
+import { eq, and, inArray } from 'drizzle-orm';
 import { queryTraces, getTraceStats } from '@/lib/clickhouse/client';
 
 export async function GET(request: NextRequest) {
@@ -78,7 +78,41 @@ export async function GET(request: NextRequest) {
         );
       }
 
-      // TODO: Check org membership
+      // Verify user has org membership
+      const membership = await db.query.organizationMembers.findFirst({
+        where: and(
+          eq(organizationMembers.userId, session.user.id),
+          eq(organizationMembers.orgId, service.project.organization.id)
+        ),
+      });
+
+      if (!membership) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: {
+              code: 'FORBIDDEN',
+              message: 'Access denied',
+              request_id: requestId,
+            },
+          },
+          { status: 403 }
+        );
+      }
+    } else {
+      // No service_id provided — scope to user's org services only
+      const memberships = await db.query.organizationMembers.findMany({
+        where: eq(organizationMembers.userId, session.user.id),
+        columns: { orgId: true },
+      });
+
+      if (memberships.length === 0) {
+        return NextResponse.json({
+          success: true,
+          data: { traces: [], stats: null },
+          meta: { page, per_page: perPage, total: 0 },
+        });
+      }
     }
 
     // Build query options

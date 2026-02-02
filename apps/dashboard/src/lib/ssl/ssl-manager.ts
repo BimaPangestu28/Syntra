@@ -1,8 +1,9 @@
 import { db } from '@/lib/db';
-import { domains } from '@/lib/db/schema';
+import { domains, services } from '@/lib/db/schema';
 import { eq, and, lt, or } from 'drizzle-orm';
 import { getAcmeClient } from './acme-client';
 import { createAlert } from '@/lib/alerts';
+import { agentHub } from '@/lib/agent/hub';
 
 // Configuration
 const SSL_RENEWAL_DAYS_BEFORE_EXPIRY = 30;
@@ -135,18 +136,35 @@ async function deployCertificate(
   domainName: string,
   cert: { certificate: string; privateKey: string; chain: string }
 ): Promise<void> {
-  // This would integrate with your reverse proxy
-  // Options include:
-  // 1. Traefik - use file provider or API
-  // 2. nginx - write cert files and reload
-  // 3. Caddy - use admin API
-  // 4. Cloud load balancer - use provider API
+  // Find the domain's associated service and server
+  const domain = await db.query.domains.findFirst({
+    where: eq(domains.domain, domainName),
+    with: {
+      service: true,
+    },
+  });
 
-  console.log(`[SSL] Certificate deployment for ${domainName} - implement based on your setup`);
+  if (!domain?.service?.serverId) {
+    console.warn(`[SSL] No server found for domain ${domainName}, skipping deploy`);
+    return;
+  }
 
-  // Example for Traefik with file provider:
-  // await fs.writeFile(`/certs/${domainName}.crt`, cert.certificate + cert.chain);
-  // await fs.writeFile(`/certs/${domainName}.key`, cert.privateKey);
+  const serverId = domain.service.serverId;
+
+  if (!agentHub.isAgentConnected(serverId)) {
+    console.warn(`[SSL] Server ${serverId} is offline, certificate will be deployed when agent reconnects`);
+    return;
+  }
+
+  // Send certificate to agent for Traefik file provider configuration
+  await agentHub.sendCommand(serverId, 'deploy_certificate', {
+    domain: domainName,
+    certificate: cert.certificate + '\n' + cert.chain,
+    private_key: cert.privateKey,
+    service_id: domain.serviceId,
+  });
+
+  console.log(`[SSL] Certificate deployed to server ${serverId} for ${domainName}`);
 }
 
 /**

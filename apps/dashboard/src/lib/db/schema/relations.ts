@@ -23,6 +23,7 @@ import {
 } from './monitoring';
 import {
   workflows,
+  workflowRuns,
   autoScalingRules,
   scalingEvents,
   cronJobs,
@@ -343,13 +344,25 @@ export const activityFeedRelations = relations(activityFeed, ({ one }) => ({
 // Automation Relations
 // ===========================================
 
-export const workflowsRelations = relations(workflows, ({ one }) => ({
+export const workflowsRelations = relations(workflows, ({ one, many }) => ({
   organization: one(organizations, {
     fields: [workflows.orgId],
     references: [organizations.id],
   }),
   creator: one(users, {
     fields: [workflows.createdBy],
+    references: [users.id],
+  }),
+  runs: many(workflowRuns),
+}));
+
+export const workflowRunsRelations = relations(workflowRuns, ({ one }) => ({
+  workflow: one(workflows, {
+    fields: [workflowRuns.workflowId],
+    references: [workflows.id],
+  }),
+  triggeredByUser: one(users, {
+    fields: [workflowRuns.triggeredBy],
     references: [users.id],
   }),
 }));

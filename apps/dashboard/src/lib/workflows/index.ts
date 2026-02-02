@@ -1,5 +1,5 @@
 import { db } from '@/lib/db';
-import { workflows, promotions } from '@/lib/db/schema';
+import { workflows, workflowRuns, promotions } from '@/lib/db/schema';
 import { eq, and, desc } from 'drizzle-orm';
 import { executeAction, ActionType, WorkflowContext } from './actions';
 
@@ -45,6 +45,15 @@ export async function executeWorkflow(
 
   console.log(`[Workflow] Executing workflow "${workflow.name}" (${workflowId})`);
 
+  // Create workflow run record
+  const [run] = await db.insert(workflowRuns).values({
+    workflowId,
+    status: 'running',
+    trigger: context.trigger,
+    context: context as Record<string, unknown>,
+    triggeredBy: context.triggeredBy || null,
+  }).returning();
+
   const actions = workflow.actions as Array<{ type: ActionType; config: Record<string, unknown> }>;
   const results: ActionResult[] = [];
   let allSuccess = true;
@@ -86,6 +95,13 @@ export async function executeWorkflow(
             .where(eq(promotions.id, resultData.promotionId));
         }
 
+        // Update run as paused
+        await db.update(workflowRuns).set({
+          status: 'paused',
+          actions: results,
+          duration: Date.now() - startTime,
+        }).where(eq(workflowRuns.id, run.id));
+
         // Return early — workflow is paused
         return {
           workflowId,
@@ -115,6 +131,14 @@ export async function executeWorkflow(
 
   const duration = Date.now() - startTime;
   console.log(`[Workflow] Completed "${workflow.name}" in ${duration}ms - ${allSuccess ? 'SUCCESS' : 'PARTIAL FAILURE'}`);
+
+  // Update workflow run record
+  await db.update(workflowRuns).set({
+    status: allSuccess ? 'completed' : 'partial_failure',
+    actions: results,
+    duration,
+    completedAt: new Date(),
+  }).where(eq(workflowRuns.id, run.id));
 
   return {
     workflowId,
@@ -366,6 +390,17 @@ export async function getWorkflowHistory(
   duration: number;
   triggeredBy?: string;
 }>> {
-  // TODO: Store workflow runs in database
-  return [];
+  const runs = await db.query.workflowRuns.findMany({
+    where: eq(workflowRuns.workflowId, workflowId),
+    orderBy: [desc(workflowRuns.startedAt)],
+    limit,
+  });
+
+  return runs.map((r) => ({
+    id: r.id,
+    status: r.status,
+    startedAt: r.startedAt.toISOString(),
+    duration: r.duration ?? 0,
+    triggeredBy: r.triggeredBy ?? undefined,
+  }));
 }

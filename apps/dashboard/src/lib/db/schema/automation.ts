@@ -78,6 +78,29 @@ export const scalingEvents = pgTable('scaling_events', {
   createdAt: timestamp('created_at', { mode: 'date' }).defaultNow().notNull(),
 });
 
+export const workflowRuns = pgTable('workflow_runs', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  workflowId: uuid('workflow_id')
+    .notNull()
+    .references(() => workflows.id, { onDelete: 'cascade' }),
+  status: varchar('status', { length: 50 }).notNull().default('running'),
+  trigger: varchar('trigger', { length: 50 }),
+  actions: jsonb('actions').$type<Array<{
+    action: string;
+    success: boolean;
+    message?: string;
+    error?: string;
+    data?: unknown;
+  }>>(),
+  context: jsonb('context').$type<Record<string, unknown>>(),
+  triggeredBy: uuid('triggered_by').references(() => users.id),
+  duration: integer('duration'),
+  errorMessage: text('error_message'),
+  startedAt: timestamp('started_at', { mode: 'date' }).defaultNow().notNull(),
+  completedAt: timestamp('completed_at', { mode: 'date' }),
+  createdAt: timestamp('created_at', { mode: 'date' }).defaultNow().notNull(),
+});
+
 export const cronJobs = pgTable('cron_jobs', {
   id: uuid('id').primaryKey().defaultRandom(),
   orgId: uuid('org_id')
