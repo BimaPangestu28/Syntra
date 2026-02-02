@@ -9,6 +9,8 @@ import {
   services,
 } from './core';
 import { deployments, domains, previewDeployments, proxyConfigs } from './deployments';
+import { deploymentStrategies } from './deployment-strategies';
+import { environments, promotions } from './environments';
 import {
   errorGroups,
   alerts,
@@ -136,6 +138,7 @@ export const projectsRelations = relations(projects, ({ one, many }) => ({
     references: [organizations.id],
   }),
   services: many(services),
+  environments: many(environments),
 }));
 
 export const servicesRelations = relations(services, ({ one, many }) => ({
@@ -150,6 +153,10 @@ export const servicesRelations = relations(services, ({ one, many }) => ({
   deployments: many(deployments),
   errorGroups: many(errorGroups),
   domains: many(domains),
+  deploymentStrategy: one(deploymentStrategies, {
+    fields: [services.id],
+    references: [deploymentStrategies.serviceId],
+  }),
 }));
 
 // ===========================================
@@ -193,6 +200,25 @@ export const proxyConfigsRelations = relations(proxyConfigs, ({ one }) => ({
   service: one(services, {
     fields: [proxyConfigs.serviceId],
     references: [services.id],
+  }),
+}));
+
+export const deploymentStrategiesRelations = relations(deploymentStrategies, ({ one }) => ({
+  service: one(services, {
+    fields: [deploymentStrategies.serviceId],
+    references: [services.id],
+  }),
+  blueDeployment: one(deployments, {
+    fields: [deploymentStrategies.blueDeploymentId],
+    references: [deployments.id],
+  }),
+  greenDeployment: one(deployments, {
+    fields: [deploymentStrategies.greenDeploymentId],
+    references: [deployments.id],
+  }),
+  canaryDeployment: one(deployments, {
+    fields: [deploymentStrategies.canaryDeploymentId],
+    references: [deployments.id],
   }),
 }));
 
@@ -688,6 +714,68 @@ export const aiSuggestionsRelations = relations(aiSuggestions, ({ one }) => ({
   }),
   dismisser: one(users, {
     fields: [aiSuggestions.dismissedBy],
+    references: [users.id],
+  }),
+}));
+
+// ===========================================
+// Environment Relations
+// ===========================================
+
+export const environmentsRelations = relations(environments, ({ one, many }) => ({
+  project: one(projects, {
+    fields: [environments.projectId],
+    references: [projects.id],
+  }),
+  activeDeployment: one(deployments, {
+    fields: [environments.activeDeploymentId],
+    references: [deployments.id],
+  }),
+  autoPromoteFromEnvironment: one(environments, {
+    fields: [environments.autoPromoteFrom],
+    references: [environments.id],
+  }),
+  lockedByUser: one(users, {
+    fields: [environments.lockedBy],
+    references: [users.id],
+  }),
+  promotionsFrom: many(promotions, {
+    relationName: 'fromEnvironment',
+  }),
+  promotionsTo: many(promotions, {
+    relationName: 'toEnvironment',
+  }),
+}));
+
+export const promotionsRelations = relations(promotions, ({ one }) => ({
+  project: one(projects, {
+    fields: [promotions.projectId],
+    references: [projects.id],
+  }),
+  fromEnvironment: one(environments, {
+    fields: [promotions.fromEnvironmentId],
+    references: [environments.id],
+    relationName: 'fromEnvironment',
+  }),
+  toEnvironment: one(environments, {
+    fields: [promotions.toEnvironmentId],
+    references: [environments.id],
+    relationName: 'toEnvironment',
+  }),
+  deployment: one(deployments, {
+    fields: [promotions.deploymentId],
+    references: [deployments.id],
+  }),
+  requester: one(users, {
+    fields: [promotions.requestedBy],
+    references: [users.id],
+  }),
+  approver: one(users, {
+    fields: [promotions.approvedBy],
+    references: [users.id],
+  }),
+  rejecter: one(users, {
+    fields: [promotions.rejectedBy],
     references: [users.id],
   }),
 }));

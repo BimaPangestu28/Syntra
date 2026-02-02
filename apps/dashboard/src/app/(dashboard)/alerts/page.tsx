@@ -1,49 +1,39 @@
 'use client';
 
-import { useState } from 'react';
-import { AlertsDashboard } from '@/components/alerts/alerts-dashboard';
-import { AlertRules } from '@/components/alerts/alert-rules';
+import { Bell, ShieldAlert } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { AlertsList } from './_components/alerts-list';
+import { AlertRulesList } from './_components/alert-rules-list';
 
 export default function AlertsPage() {
-  const [tab, setTab] = useState<'alerts' | 'rules'>('alerts');
-
-  // TODO: Get orgId from session/context
-  const orgId = '';
-
   return (
-    <div className="p-8 max-w-6xl">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold">Alerts</h1>
-        <p className="text-muted-foreground mt-1">
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">Alerts</h1>
+        <p className="text-muted-foreground">
           Monitor and manage alerts across your infrastructure
         </p>
       </div>
 
-      {/* Tabs */}
-      <div className="flex items-center gap-1 bg-muted rounded-lg p-1 w-fit mb-6">
-        <button
-          onClick={() => setTab('alerts')}
-          className={`px-4 py-2 rounded-md text-sm transition-colors ${
-            tab === 'alerts'
-              ? 'bg-background text-foreground font-medium'
-              : 'text-muted-foreground hover:text-foreground'
-          }`}
-        >
-          Active Alerts
-        </button>
-        <button
-          onClick={() => setTab('rules')}
-          className={`px-4 py-2 rounded-md text-sm transition-colors ${
-            tab === 'rules'
-              ? 'bg-background text-foreground font-medium'
-              : 'text-muted-foreground hover:text-foreground'
-          }`}
-        >
-          Alert Rules
-        </button>
-      </div>
+      <Tabs defaultValue="alerts">
+        <TabsList>
+          <TabsTrigger value="alerts" className="gap-2">
+            <Bell className="h-4 w-4" />
+            Alerts
+          </TabsTrigger>
+          <TabsTrigger value="rules" className="gap-2">
+            <ShieldAlert className="h-4 w-4" />
+            Rules
+          </TabsTrigger>
+        </TabsList>
 
-      {tab === 'alerts' ? <AlertsDashboard /> : <AlertRules orgId={orgId} />}
+        <TabsContent value="alerts" className="mt-6">
+          <AlertsList />
+        </TabsContent>
+        <TabsContent value="rules" className="mt-6">
+          <AlertRulesList />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

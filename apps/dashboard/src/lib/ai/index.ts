@@ -109,3 +109,4 @@ export { getRecommendations } from './recommendations';
 export { generateIncidentSummary } from './incident';
 export { buildSystemPrompt } from './system-prompt';
 export { analyzeRecentErrors, analyzeMetrics, generateSuggestions } from './suggestions';
+export { detectAnomalies, detectAnomaliesForAllServices } from './anomaly-detection';

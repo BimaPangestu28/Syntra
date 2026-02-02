@@ -2,6 +2,8 @@ export * from './enums';
 export * from './auth';
 export * from './core';
 export * from './deployments';
+export * from './deployment-strategies';
+export * from './environments';
 export * from './monitoring';
 export * from './automation';
 export * from './billing';

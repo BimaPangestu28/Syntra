@@ -4,6 +4,7 @@ import { startBuildWorker, stopBuildWorker } from './build.worker';
 import { startDeploymentWorker, stopDeploymentWorker } from './deployment.worker';
 import { startNotificationWorker, stopNotificationWorker } from './notification.worker';
 import { createAlertEvaluationWorker, stopAlertEvaluationWorker } from './alert-evaluation.worker';
+import { createAnomalyDetectionWorker } from './anomaly-detection.worker';
 
 let workersStarted = false;
 
@@ -29,6 +30,9 @@ export async function startAllWorkers(): Promise<void> {
 
     // Start alert evaluation worker
     createAlertEvaluationWorker();
+
+    // Start anomaly detection worker
+    createAnomalyDetectionWorker();
 
     workersStarted = true;
     console.log('[Workers] All workers started successfully');
@@ -77,3 +81,4 @@ export { startBuildWorker, stopBuildWorker } from './build.worker';
 export { startDeploymentWorker, stopDeploymentWorker } from './deployment.worker';
 export { startNotificationWorker, stopNotificationWorker } from './notification.worker';
 export { createAlertEvaluationWorker, stopAlertEvaluationWorker } from './alert-evaluation.worker';
+export { createAnomalyDetectionWorker } from './anomaly-detection.worker';
