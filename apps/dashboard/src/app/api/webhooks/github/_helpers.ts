@@ -149,9 +149,9 @@ export async function handlePushEvent(
 
   // Find projects matching this repository
   const matchingProjects = await db.query.projects.findMany({
-    where: (projects, { or, like }) =>
+    where: (projects, { or }) =>
       or(
-        like(projects.gitRepoUrl, `%${payload.repository.full_name}%`),
+        eq(projects.gitRepoUrl, `https://github.com/${payload.repository.full_name}`),
         eq(projects.gitRepoUrl, repoUrl),
         eq(projects.gitRepoUrl, payload.repository.clone_url),
         eq(projects.gitRepoUrl, payload.repository.ssh_url)
@@ -291,9 +291,9 @@ export async function handlePullRequestEvent(
   console.log(`[GitHub Webhook] PR #${pr.number} ${payload.action}: ${pr.title}`);
 
   const matchingProjects = await db.query.projects.findMany({
-    where: (projects, { or, like }) =>
+    where: (projects, { or }) =>
       or(
-        like(projects.gitRepoUrl, `%${payload.repository.full_name}%`),
+        eq(projects.gitRepoUrl, `https://github.com/${payload.repository.full_name}`),
         eq(projects.gitRepoUrl, repoUrl),
         eq(projects.gitRepoUrl, payload.repository.clone_url)
       ),

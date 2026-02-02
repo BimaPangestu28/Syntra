@@ -8,7 +8,9 @@
       "Bash(cd:*)",
       "Bash(test:*)",
       "Bash(npx next lint:*)",
-      "Bash(npx --yes tsc:*)"
+      "Bash(npx --yes tsc:*)",
+      "Bash(for file in \"/root/works/personal/Syntra/apps/dashboard/src/app/\\(dashboard\\)/projects/[id]/_components/create-service-\"*\"-tab.tsx\")",
+      "Bash(done)"
     ]
   }
 }

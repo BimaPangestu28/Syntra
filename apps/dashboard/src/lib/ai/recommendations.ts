@@ -1,11 +1,5 @@
-import Anthropic from '@anthropic-ai/sdk';
+import { getAnthropicClient, MODEL } from './client';
 import type { ServiceContext } from './index';
-
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY || '',
-});
-
-const MODEL = 'claude-3-5-haiku-20241022';
 
 /**
  * Get resource optimization recommendations
@@ -53,7 +47,7 @@ Provide recommendations in JSON format:
 
 Respond ONLY with the JSON object.`;
 
-  const response = await anthropic.messages.create({
+  const response = await getAnthropicClient().messages.create({
     model: MODEL,
     max_tokens: 1024,
     messages: [{ role: 'user', content: prompt }],

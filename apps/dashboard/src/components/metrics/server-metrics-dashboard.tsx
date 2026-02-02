@@ -38,9 +38,12 @@ export function ServerMetricsDashboard({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchMetrics = useCallback(async () => {
+  const fetchMetrics = useCallback(async (signal?: AbortSignal) => {
     try {
-      const response = await fetch(`/api/v1/telemetry/metrics?server_id=${serverId}`);
+      const response = await fetch(`/api/v1/telemetry/metrics?server_id=${serverId}`, { signal });
+
+      if (signal?.aborted) return;
+
       const data = await response.json();
 
       if (data.success && data.data) {
@@ -72,6 +75,7 @@ export function ServerMetricsDashboard({
 
       setError(null);
     } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') return;
       setError('Failed to fetch metrics');
       console.error('Metrics fetch error:', err);
     } finally {
@@ -80,9 +84,14 @@ export function ServerMetricsDashboard({
   }, [serverId]);
 
   useEffect(() => {
-    fetchMetrics();
-    const interval = setInterval(fetchMetrics, refreshInterval);
-    return () => clearInterval(interval);
+    const controller = new AbortController();
+    const fetchData = () => fetchMetrics(controller.signal);
+    fetchData();
+    const interval = setInterval(fetchData, refreshInterval);
+    return () => {
+      controller.abort();
+      clearInterval(interval);
+    };
   }, [fetchMetrics, refreshInterval]);
 
   const formatUptime = (seconds: number) => {
@@ -114,8 +123,9 @@ export function ServerMetricsDashboard({
       <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
         <p className="text-red-600 dark:text-red-400">{error}</p>
         <button
-          onClick={fetchMetrics}
+          onClick={() => fetchMetrics()}
           className="mt-2 text-sm text-red-600 dark:text-red-400 underline"
+          aria-label="Retry fetching metrics"
         >
           Retry
         </button>

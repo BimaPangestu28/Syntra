@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
+import { rateLimiters } from '@/lib/utils/rate-limit';
 import {
   handlePingEvent,
   handlePushEvent,
@@ -30,6 +31,16 @@ function verifySignature(payload: string, signature: string | null, secret: stri
 export async function POST(req: NextRequest) {
   const requestId = crypto.randomUUID();
 
+  // Rate limit webhooks by IP
+  const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
+  const rl = rateLimiters.webhook(ip);
+  if (!rl.success) {
+    return NextResponse.json(
+      { success: false, error: 'Rate limited', request_id: requestId },
+      { status: 429 }
+    );
+  }
+
   try {
     const event = req.headers.get('x-github-event') as GitHubEvent | null;
     const signature = req.headers.get('x-hub-signature-256');
@@ -47,14 +58,20 @@ export async function POST(req: NextRequest) {
     const rawBody = await req.text();
 
     const webhookSecret = process.env.GITHUB_WEBHOOK_SECRET;
-    if (webhookSecret) {
-      if (!verifySignature(rawBody, signature, webhookSecret)) {
-        console.log('[GitHub Webhook] Invalid signature');
-        return NextResponse.json(
-          { success: false, error: 'Invalid signature', request_id: requestId },
-          { status: 401 }
-        );
-      }
+    if (!webhookSecret) {
+      console.error('[GitHub Webhook] GITHUB_WEBHOOK_SECRET is not configured');
+      return NextResponse.json(
+        { success: false, error: 'Webhook secret not configured', request_id: requestId },
+        { status: 500 }
+      );
+    }
+
+    if (!verifySignature(rawBody, signature, webhookSecret)) {
+      console.log('[GitHub Webhook] Invalid signature');
+      return NextResponse.json(
+        { success: false, error: 'Invalid signature', request_id: requestId },
+        { status: 401 }
+      );
     }
 
     const payload = JSON.parse(rawBody);

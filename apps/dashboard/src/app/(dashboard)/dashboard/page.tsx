@@ -34,14 +34,8 @@ async function getDashboardData(userId: string) {
 
   const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
-  // Fetch all data in parallel
-  const [
-    serverList,
-    projectList,
-    deploymentList,
-    alertList,
-    errorList,
-  ] = await Promise.all([
+  // Fetch servers and projects first
+  const [serverList, projectList] = await Promise.all([
     db.query.servers.findMany({
       where: inArray(servers.orgId, orgIds),
       columns: {
@@ -60,19 +54,37 @@ async function getDashboardData(userId: string) {
       where: inArray(projects.orgId, orgIds),
       columns: { id: true },
     }),
-    db.query.deployments.findMany({
-      orderBy: [desc(deployments.createdAt)],
-      limit: 50,
-      with: {
-        service: {
+  ]);
+
+  // Get project IDs and service IDs for filtering
+  const projectIds = projectList.map(p => p.id);
+
+  const serviceList = projectIds.length > 0
+    ? await db.query.services.findMany({
+        where: inArray(services.projectId, projectIds),
+        columns: { id: true },
+      })
+    : [];
+  const serviceIds = serviceList.map(s => s.id);
+
+  // Fetch remaining data in parallel with proper filters
+  const [deploymentList, alertList, errorList] = await Promise.all([
+    serviceIds.length > 0
+      ? db.query.deployments.findMany({
+          where: inArray(deployments.serviceId, serviceIds),
+          orderBy: [desc(deployments.createdAt)],
+          limit: 50,
           with: {
-            project: {
-              columns: { id: true, name: true, orgId: true },
+            service: {
+              with: {
+                project: {
+                  columns: { id: true, name: true, orgId: true },
+                },
+              },
             },
           },
-        },
-      },
-    }),
+        })
+      : Promise.resolve([]),
     db.query.alerts.findMany({
       where: and(
         inArray(alerts.orgId, orgIds),
@@ -88,30 +100,29 @@ async function getDashboardData(userId: string) {
         service: { columns: { id: true, name: true } },
       },
     }),
-    db.query.errorGroups.findMany({
-      where: and(
-        eq(errorGroups.status, 'open'),
-        gte(errorGroups.lastSeenAt, oneDayAgo)
-      ),
-      orderBy: [desc(errorGroups.eventCount)],
-      limit: 10,
-      with: {
-        service: {
+    serviceIds.length > 0
+      ? db.query.errorGroups.findMany({
+          where: and(
+            inArray(errorGroups.serviceId, serviceIds),
+            eq(errorGroups.status, 'open'),
+            gte(errorGroups.lastSeenAt, oneDayAgo)
+          ),
+          orderBy: [desc(errorGroups.eventCount)],
+          limit: 10,
           with: {
-            project: {
-              columns: { id: true, name: true, orgId: true },
+            service: {
+              with: {
+                project: {
+                  columns: { id: true, name: true, orgId: true },
+                },
+              },
             },
           },
-        },
-      },
-    }),
+        })
+      : Promise.resolve([]),
   ]);
 
-  // Filter by user's orgs
-  const filteredDeployments = deploymentList.filter((d) => orgIds.includes(d.service.project.orgId));
-  const filteredErrors = errorList.filter((e) => orgIds.includes(e.service.project.orgId));
-
-  const inProgressDeployments = filteredDeployments.filter(
+  const inProgressDeployments = deploymentList.filter(
     (d) => d.status === 'pending' || d.status === 'building' || d.status === 'deploying'
   );
 
@@ -120,16 +131,16 @@ async function getDashboardData(userId: string) {
       servers: serverList.length,
       onlineServers: serverList.filter((s) => s.status === 'online').length,
       projects: projectList.length,
-      deployments: filteredDeployments.length,
-      failedDeployments: filteredDeployments.filter((d) => d.status === 'failed').length,
+      deployments: deploymentList.length,
+      failedDeployments: deploymentList.filter((d) => d.status === 'failed').length,
       activeAlerts: alertList.length,
-      openErrors: filteredErrors.length,
+      openErrors: errorList.length,
     },
     servers: serverList,
     activeAlerts: alertList,
-    recentErrors: filteredErrors.slice(0, 5),
+    recentErrors: errorList.slice(0, 5),
     inProgressDeployments: inProgressDeployments.slice(0, 5),
-    recentDeployments: filteredDeployments.filter(
+    recentDeployments: deploymentList.filter(
       (d) => d.status === 'running' || d.status === 'failed'
     ).slice(0, 5),
   };

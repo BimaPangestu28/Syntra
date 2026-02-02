@@ -1,5 +1,6 @@
 import { relations } from 'drizzle-orm';
-import { users, accounts, sessions } from './auth';
+import { users, accounts, sessions, invitationTokens } from './auth';
+import { chatConversations, chatMessages, aiSuggestions } from './ai';
 import {
   organizations,
   organizationMembers,
@@ -77,6 +78,13 @@ export const sessionsRelations = relations(sessions, ({ one }) => ({
   user: one(users, {
     fields: [sessions.userId],
     references: [users.id],
+  }),
+}));
+
+export const invitationTokensRelations = relations(invitationTokens, ({ one }) => ({
+  membership: one(organizationMembers, {
+    fields: [invitationTokens.membershipId],
+    references: [organizationMembers.id],
   }),
 }));
 
@@ -639,5 +647,47 @@ export const apiKeysRelations = relations(apiKeys, ({ one }) => ({
   organization: one(organizations, {
     fields: [apiKeys.orgId],
     references: [organizations.id],
+  }),
+}));
+
+// ===========================================
+// AI Relations
+// ===========================================
+
+export const chatConversationsRelations = relations(chatConversations, ({ one, many }) => ({
+  organization: one(organizations, {
+    fields: [chatConversations.orgId],
+    references: [organizations.id],
+  }),
+  service: one(services, {
+    fields: [chatConversations.serviceId],
+    references: [services.id],
+  }),
+  user: one(users, {
+    fields: [chatConversations.userId],
+    references: [users.id],
+  }),
+  messages: many(chatMessages),
+}));
+
+export const chatMessagesRelations = relations(chatMessages, ({ one }) => ({
+  conversation: one(chatConversations, {
+    fields: [chatMessages.conversationId],
+    references: [chatConversations.id],
+  }),
+}));
+
+export const aiSuggestionsRelations = relations(aiSuggestions, ({ one }) => ({
+  organization: one(organizations, {
+    fields: [aiSuggestions.orgId],
+    references: [organizations.id],
+  }),
+  service: one(services, {
+    fields: [aiSuggestions.serviceId],
+    references: [services.id],
+  }),
+  dismisser: one(users, {
+    fields: [aiSuggestions.dismissedBy],
+    references: [users.id],
   }),
 }));

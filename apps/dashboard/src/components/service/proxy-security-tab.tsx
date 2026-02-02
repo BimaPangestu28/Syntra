@@ -50,7 +50,7 @@ export function ProxySecurityTab({
                 id="basic_auth_password"
                 type="password"
                 placeholder={editingConfig ? '(unchanged)' : ''}
-                onChange={(e) => updateField('basic_auth_password' as any, e.target.value)}
+                onChange={(e) => updateField('basic_auth_password', e.target.value)}
               />
             </div>
           </div>

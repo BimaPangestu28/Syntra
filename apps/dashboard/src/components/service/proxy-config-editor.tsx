@@ -77,18 +77,22 @@ export function ProxyConfigEditor({
   const [ipBlacklist, setIpBlacklist] = useState('');
 
   useEffect(() => {
-    fetchConfigs();
+    const controller = new AbortController();
+    fetchConfigs(controller.signal);
+    return () => controller.abort();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [serviceId]);
 
-  async function fetchConfigs() {
+  async function fetchConfigs(signal?: AbortSignal) {
     try {
-      const res = await fetch(`/api/v1/services/${serviceId}/proxy`);
+      const res = await fetch(`/api/v1/services/${serviceId}/proxy`, { signal });
+      if (signal?.aborted) return;
       const data = await res.json();
       if (data.success) {
         setConfigs(data.data);
       }
     } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') return;
       console.error('Failed to fetch proxy configs:', error);
     } finally {
       setLoading(false);
@@ -168,14 +172,17 @@ export function ProxyConfigEditor({
     }
   }
 
-  async function handleDelete(configId: string, configName: string) {
+  async function handleDelete(configId: string, configName: string, signal?: AbortSignal) {
     const ok = await confirm({ title: 'Delete Proxy Rule', description: `Are you sure you want to delete ${configName}?`, confirmLabel: 'Delete', variant: 'destructive' });
     if (!ok) return;
 
     try {
       const res = await fetch(`/api/v1/services/${serviceId}/proxy/${configId}`, {
         method: 'DELETE',
+        signal,
       });
+
+      if (signal?.aborted) return;
 
       if (res.ok) {
         fetchConfigs();
@@ -186,17 +193,21 @@ export function ProxyConfigEditor({
         setError(data.error?.message || 'Failed to delete proxy configuration');
       }
     } catch (e) {
+      if (e instanceof DOMException && e.name === 'AbortError') return;
       setError('Failed to delete proxy configuration');
     }
   }
 
-  async function handleToggleEnabled(config: ProxyConfig) {
+  async function handleToggleEnabled(config: ProxyConfig, signal?: AbortSignal) {
     try {
       const res = await fetch(`/api/v1/services/${serviceId}/proxy/${config.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ is_enabled: !config.is_enabled }),
+        signal,
       });
+
+      if (signal?.aborted) return;
 
       if (res.ok) {
         fetchConfigs();
@@ -204,6 +215,7 @@ export function ProxyConfigEditor({
         toast.success(config.is_enabled ? 'Rule disabled' : 'Rule enabled');
       }
     } catch (e) {
+      if (e instanceof DOMException && e.name === 'AbortError') return;
       console.error('Failed to toggle proxy config:', e);
     }
   }
@@ -303,6 +315,7 @@ export function ProxyConfigEditor({
                       size="sm"
                       onClick={() => handleToggleEnabled(config)}
                       disabled={!canEdit}
+                      aria-label={config.is_enabled ? `Disable ${config.name}` : `Enable ${config.name}`}
                     >
                       {config.is_enabled ? (
                         <ToggleRight className="h-5 w-5 text-green-600" />
@@ -318,6 +331,7 @@ export function ProxyConfigEditor({
                           variant="ghost"
                           size="sm"
                           onClick={() => openEditDialog(config)}
+                          aria-label={`Edit ${config.name}`}
                         >
                           <Edit2 className="h-4 w-4" />
                         </Button>
@@ -325,6 +339,7 @@ export function ProxyConfigEditor({
                           variant="ghost"
                           size="sm"
                           onClick={() => handleDelete(config.id, config.name)}
+                          aria-label={`Delete ${config.name}`}
                         >
                           <Trash2 className="h-4 w-4 text-destructive" />
                         </Button>
@@ -430,7 +445,7 @@ export function ProxyConfigEditor({
               <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
                 Cancel
               </Button>
-              <Button onClick={handleSave} disabled={saving}>
+              <Button onClick={() => handleSave()} disabled={saving}>
                 <Save className="mr-2 h-4 w-4" />
                 {saving ? 'Saving...' : 'Save'}
               </Button>

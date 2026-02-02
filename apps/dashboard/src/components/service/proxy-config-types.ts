@@ -32,6 +32,7 @@ export interface ProxyConfig {
   cors_allow_credentials: boolean;
   basic_auth_enabled: boolean;
   basic_auth_username?: string;
+  basic_auth_password?: string;
   ip_whitelist?: string[];
   ip_blacklist?: string[];
   websocket_enabled: boolean;

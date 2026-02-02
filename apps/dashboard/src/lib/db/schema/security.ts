@@ -7,6 +7,7 @@ import {
   boolean,
   jsonb,
   integer,
+  index,
 } from 'drizzle-orm/pg-core';
 import { users } from './auth';
 import { organizations, projects, services } from './core';
@@ -81,7 +82,10 @@ export const auditLogs = pgTable('audit_logs', {
   userAgent: text('user_agent'),
   requestId: varchar('request_id', { length: 36 }),
   createdAt: timestamp('created_at', { mode: 'date' }).defaultNow().notNull(),
-});
+}, (table) => [
+  index('idx_audit_logs_org_id').on(table.orgId),
+  index('idx_audit_logs_action').on(table.action),
+]);
 
 export const rateLimitRules = pgTable('rate_limit_rules', {
   id: uuid('id').primaryKey().defaultRandom(),

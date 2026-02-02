@@ -14,6 +14,8 @@ export const QUEUE_NAMES = {
   DEPLOYMENT: 'deployment',
   BUILD: 'build',
   NOTIFICATION: 'notification',
+  UPTIME: 'uptime',
+  AI_SUGGESTIONS: 'ai-suggestions',
 } as const;
 
 // Job types
@@ -58,10 +60,30 @@ export interface NotificationJobData {
   recipients?: string[];
 }
 
+export interface UptimeJobData {
+  monitorId: string;
+  url: string;
+  method: string;
+  headers?: Record<string, string>;
+  body?: string;
+  expectedStatusCode: number;
+  expectedResponseContains?: string;
+  timeoutSeconds: number;
+  alertAfterFailures: number;
+  orgId: string;
+}
+
+export interface AiSuggestionsJobData {
+  serviceId: string;
+  orgId: string;
+}
+
 // Create queues
 let deploymentQueue: Queue<DeploymentJobData> | null = null;
 let buildQueue: Queue<BuildJobData> | null = null;
 let notificationQueue: Queue<NotificationJobData> | null = null;
+let uptimeQueue: Queue<UptimeJobData> | null = null;
+let aiSuggestionsQueue: Queue<AiSuggestionsJobData> | null = null;
 
 export function getDeploymentQueue(): Queue<DeploymentJobData> {
   if (!deploymentQueue) {
@@ -131,6 +153,50 @@ export function getNotificationQueue(): Queue<NotificationJobData> {
   return notificationQueue;
 }
 
+export function getUptimeQueue(): Queue<UptimeJobData> {
+  if (!uptimeQueue) {
+    uptimeQueue = new Queue<UptimeJobData>(QUEUE_NAMES.UPTIME, {
+      connection: getRedisConnection(),
+      defaultJobOptions: {
+        attempts: 1,
+        removeOnComplete: {
+          count: 500,
+          age: 3600, // 1 hour
+        },
+        removeOnFail: {
+          count: 1000,
+          age: 24 * 3600,
+        },
+      },
+    });
+  }
+  return uptimeQueue;
+}
+
+export function getAiSuggestionsQueue(): Queue<AiSuggestionsJobData> {
+  if (!aiSuggestionsQueue) {
+    aiSuggestionsQueue = new Queue<AiSuggestionsJobData>(QUEUE_NAMES.AI_SUGGESTIONS, {
+      connection: getRedisConnection(),
+      defaultJobOptions: {
+        attempts: 2,
+        backoff: {
+          type: 'exponential',
+          delay: 5000,
+        },
+        removeOnComplete: {
+          count: 200,
+          age: 3600,
+        },
+        removeOnFail: {
+          count: 500,
+          age: 24 * 3600,
+        },
+      },
+    });
+  }
+  return aiSuggestionsQueue;
+}
+
 // Helper to add deployment job
 export async function queueDeployment(data: DeploymentJobData, priority: number = 0) {
   const queue = getDeploymentQueue();
@@ -157,6 +223,24 @@ export async function queueNotification(data: NotificationJobData) {
   const queue = getNotificationQueue();
   const job = await queue.add('notify', data);
   console.log(`[Queue] Added notification job ${job.id}`);
+  return job;
+}
+
+// Helper to add uptime check job
+export async function queueUptimeCheck(data: UptimeJobData) {
+  const queue = getUptimeQueue();
+  const job = await queue.add('check', data, {
+    jobId: `uptime-${data.monitorId}-${Date.now()}`,
+  });
+  return job;
+}
+
+// Helper to add AI suggestions job
+export async function queueAiSuggestions(data: AiSuggestionsJobData) {
+  const queue = getAiSuggestionsQueue();
+  const job = await queue.add('analyze', data, {
+    jobId: `ai-suggest-${data.serviceId}-${Date.now()}`,
+  });
   return job;
 }
 
@@ -211,7 +295,7 @@ export async function getQueueStats() {
 
 // Cleanup function for graceful shutdown
 export async function closeQueues() {
-  const queues = [deploymentQueue, buildQueue, notificationQueue].filter(Boolean);
+  const queues = [deploymentQueue, buildQueue, notificationQueue, uptimeQueue, aiSuggestionsQueue].filter(Boolean);
   await Promise.all(queues.map((q) => q?.close()));
   console.log('[Queue] All queues closed');
 }

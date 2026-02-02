@@ -7,8 +7,8 @@ import {
   Trash2,
   Loader2,
   Users,
-  UserPlus,
   LogOut,
+  RefreshCw,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -51,7 +51,7 @@ interface MemberListProps {
   onChangeRole: (memberId: string, newRole: Role) => void;
   onRemoveMember: (memberId: string) => void;
   onLeaveOrg: () => void;
-  onOpenInvite: () => void;
+  onResendInvite?: (memberId: string) => void;
 }
 
 export function MemberList({
@@ -64,7 +64,7 @@ export function MemberList({
   onChangeRole,
   onRemoveMember,
   onLeaveOrg,
-  onOpenInvite,
+  onResendInvite,
 }: MemberListProps) {
   const activeMembers = members.filter((m) => m.accepted_at !== null);
   const pendingMembers = members.filter((m) => m.accepted_at === null);
@@ -78,12 +78,6 @@ export function MemberList({
         <p className="text-muted-foreground mb-4">
           Invite your first team member to get started.
         </p>
-        {canManage && (
-          <Button onClick={onOpenInvite}>
-            <UserPlus className="mr-2 h-4 w-4" />
-            Invite Member
-          </Button>
-        )}
       </Card>
     );
   }
@@ -240,6 +234,15 @@ export function MemberList({
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
+                            {onResendInvite && (
+                              <DropdownMenuItem
+                                onClick={() => onResendInvite(member.id)}
+                              >
+                                <RefreshCw className="mr-2 h-4 w-4" />
+                                Resend Invitation
+                              </DropdownMenuItem>
+                            )}
+                            <DropdownMenuSeparator />
                             <DropdownMenuItem
                               className="text-destructive"
                               onClick={() => onRemoveMember(member.id)}

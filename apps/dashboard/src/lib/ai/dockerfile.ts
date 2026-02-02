@@ -1,10 +1,4 @@
-import Anthropic from '@anthropic-ai/sdk';
-
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY || '',
-});
-
-const MODEL = 'claude-3-5-haiku-20241022';
+import { getAnthropicClient, MODEL } from './client';
 
 export interface DockerfileContext {
   files: Array<{ path: string; content: string }>;
@@ -57,7 +51,7 @@ Respond in the following JSON format:
 
 Respond ONLY with the JSON object.`;
 
-  const response = await anthropic.messages.create({
+  const response = await getAnthropicClient().messages.create({
     model: MODEL,
     max_tokens: 2048,
     messages: [{ role: 'user', content: prompt }],

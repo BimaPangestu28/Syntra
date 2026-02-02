@@ -1,6 +1,12 @@
+pub mod context;
 pub mod deploy;
+pub mod domains;
+pub mod env;
 pub mod login;
 pub mod logs;
 pub mod projects;
+pub mod rollback;
+pub mod scale;
+pub mod secrets;
 pub mod services;
 pub mod status;

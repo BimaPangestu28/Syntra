@@ -7,6 +7,7 @@ import {
   boolean,
   jsonb,
   integer,
+  index,
 } from 'drizzle-orm/pg-core';
 import { alertSeverityEnum, alertStatusEnum, logLevelEnum } from './enums';
 import { users } from './auth';
@@ -32,7 +33,11 @@ export const errorGroups = pgTable('error_groups', {
   metadata: jsonb('metadata').$type<Record<string, unknown>>(),
   createdAt: timestamp('created_at', { mode: 'date' }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { mode: 'date' }).defaultNow().notNull(),
-});
+}, (table) => [
+  index('idx_error_groups_service_id').on(table.serviceId),
+  index('idx_error_groups_fingerprint').on(table.fingerprint),
+  index('idx_error_groups_status').on(table.status),
+]);
 
 export const alerts = pgTable('alerts', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -54,7 +59,10 @@ export const alerts = pgTable('alerts', {
   resolvedBy: uuid('resolved_by').references(() => users.id),
   createdAt: timestamp('created_at', { mode: 'date' }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { mode: 'date' }).defaultNow().notNull(),
-});
+}, (table) => [
+  index('idx_alerts_org_id').on(table.orgId),
+  index('idx_alerts_status').on(table.status),
+]);
 
 export const alertRules = pgTable('alert_rules', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -112,7 +120,11 @@ export const containerLogs = pgTable('container_logs', {
   source: varchar('source', { length: 50 }),
   metadata: jsonb('metadata').$type<Record<string, unknown>>(),
   createdAt: timestamp('created_at', { mode: 'date' }).defaultNow().notNull(),
-});
+}, (table) => [
+  index('idx_container_logs_org_id').on(table.orgId),
+  index('idx_container_logs_service_time').on(table.serviceId, table.timestamp),
+  index('idx_container_logs_level').on(table.level),
+]);
 
 export const uptimeMonitors = pgTable('uptime_monitors', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -167,4 +179,7 @@ export const activityFeed = pgTable('activity_feed', {
   metadata: jsonb('metadata').$type<Record<string, unknown>>(),
   isRead: boolean('is_read').default(false),
   createdAt: timestamp('created_at', { mode: 'date' }).defaultNow().notNull(),
-});
+}, (table) => [
+  index('idx_activity_feed_org_id').on(table.orgId),
+  index('idx_activity_feed_type').on(table.type),
+]);

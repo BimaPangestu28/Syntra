@@ -44,6 +44,14 @@ export const sessions = pgTable('sessions', {
   expires: timestamp('expires', { mode: 'date' }).notNull(),
 });
 
+export const invitationTokens = pgTable('invitation_tokens', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  token: varchar('token', { length: 255 }).notNull().unique(),
+  membershipId: uuid('membership_id').notNull(),
+  expiresAt: timestamp('expires_at', { mode: 'date' }).notNull(),
+  createdAt: timestamp('created_at', { mode: 'date' }).defaultNow().notNull(),
+});
+
 export const verificationTokens = pgTable(
   'verification_tokens',
   {

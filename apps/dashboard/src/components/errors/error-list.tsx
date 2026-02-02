@@ -107,19 +107,21 @@ export function ErrorList({ serviceId }: ErrorListProps) {
   const [detailedError, setDetailedError] = useState<DetailedError | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
 
-  const fetchErrors = async () => {
+  const fetchErrors = async (signal?: AbortSignal) => {
     setLoading(true);
     try {
       const params = new URLSearchParams({ service_id: serviceId });
       if (statusFilter !== 'all') {
         params.append('status', statusFilter);
       }
-      const res = await fetch(`/api/v1/errors?${params}`);
+      const res = await fetch(`/api/v1/errors?${params}`, { signal });
+      if (signal?.aborted) return;
       const data = await res.json();
       if (data.success) {
         setErrors(data.data);
       }
     } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') return;
       console.error('Failed to fetch errors:', error);
     } finally {
       setLoading(false);
@@ -127,19 +129,23 @@ export function ErrorList({ serviceId }: ErrorListProps) {
   };
 
   useEffect(() => {
-    fetchErrors();
+    const controller = new AbortController();
+    fetchErrors(controller.signal);
+    return () => controller.abort();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [serviceId, statusFilter]);
 
-  const fetchErrorDetail = async (errorId: string) => {
+  const fetchErrorDetail = async (errorId: string, signal?: AbortSignal) => {
     setLoadingDetail(true);
     try {
-      const res = await fetch(`/api/v1/errors/${errorId}`);
+      const res = await fetch(`/api/v1/errors/${errorId}`, { signal });
+      if (signal?.aborted) return;
       const data = await res.json();
       if (data.success) {
         setDetailedError(data.data);
       }
     } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') return;
       console.error('Failed to fetch error detail:', error);
     } finally {
       setLoadingDetail(false);
@@ -214,7 +220,7 @@ export function ErrorList({ serviceId }: ErrorListProps) {
                 <SelectItem value="ignored">Ignored</SelectItem>
               </SelectContent>
             </Select>
-            <Button variant="outline" size="icon" onClick={fetchErrors}>
+            <Button variant="outline" size="icon" onClick={() => fetchErrors()} aria-label="Refresh errors">
               <RefreshCw className="w-4 h-4" />
             </Button>
           </div>

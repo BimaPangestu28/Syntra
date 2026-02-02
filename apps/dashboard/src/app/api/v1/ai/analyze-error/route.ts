@@ -107,6 +107,14 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const MAX_STACK_TRACE_LENGTH = 20000;
+    if (stack_trace.length > MAX_STACK_TRACE_LENGTH) {
+      return NextResponse.json(
+        { success: false, error: { code: 'VALIDATION_ERROR', message: `stack_trace exceeds maximum length of ${MAX_STACK_TRACE_LENGTH}`, request_id: crypto.randomUUID() } },
+        { status: 400 }
+      );
+    }
+
     let serviceName = 'Unknown Service';
     if (service_id) {
       const service = await db.query.services.findFirst({

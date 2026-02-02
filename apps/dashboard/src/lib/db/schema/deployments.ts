@@ -7,6 +7,7 @@ import {
   boolean,
   jsonb,
   integer,
+  index,
 } from 'drizzle-orm/pg-core';
 import { deploymentStatusEnum, domainStatusEnum, sslStatusEnum, previewStatusEnum } from './enums';
 import { users } from './auth';
@@ -38,7 +39,11 @@ export const deployments = pgTable('deployments', {
   metadata: jsonb('metadata').$type<Record<string, unknown>>(),
   createdAt: timestamp('created_at', { mode: 'date' }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { mode: 'date' }).defaultNow().notNull(),
-});
+}, (table) => [
+  index('idx_deployments_service_id').on(table.serviceId),
+  index('idx_deployments_status').on(table.status),
+  index('idx_deployments_service_created').on(table.serviceId, table.createdAt),
+]);
 
 export const domains = pgTable('domains', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -63,7 +68,9 @@ export const domains = pgTable('domains', {
   errorMessage: text('error_message'),
   createdAt: timestamp('created_at', { mode: 'date' }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { mode: 'date' }).defaultNow().notNull(),
-});
+}, (table) => [
+  index('idx_domains_service_id').on(table.serviceId),
+]);
 
 export const previewDeployments = pgTable('preview_deployments', {
   id: uuid('id').primaryKey().defaultRandom(),

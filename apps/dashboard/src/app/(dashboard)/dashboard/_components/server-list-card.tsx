@@ -9,6 +9,7 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { formatTimeAgo } from '@/lib/utils/format';
 
 interface ServerItem {
   id: string;
@@ -21,20 +22,6 @@ interface ServerItem {
 
 interface ServerListCardProps {
   servers: ServerItem[];
-}
-
-function formatTimeAgo(date: Date | null) {
-  if (!date) return 'Never';
-  const now = new Date();
-  const diffMs = now.getTime() - new Date(date).getTime();
-  const diffMins = Math.floor(diffMs / 60000);
-  const diffHours = Math.floor(diffMs / 3600000);
-  const diffDays = Math.floor(diffMs / 86400000);
-
-  if (diffMins < 1) return 'Just now';
-  if (diffMins < 60) return `${diffMins}m ago`;
-  if (diffHours < 24) return `${diffHours}h ago`;
-  return `${diffDays}d ago`;
 }
 
 export function ServerListCard({ servers }: ServerListCardProps) {

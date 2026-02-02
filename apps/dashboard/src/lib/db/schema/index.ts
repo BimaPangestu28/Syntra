@@ -7,5 +7,6 @@ export * from './automation';
 export * from './billing';
 export * from './infrastructure';
 export * from './security';
+export * from './ai';
 export * from './relations';
 export * from './types';

@@ -85,18 +85,49 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    // Build query
+    // Get project IDs for the user's orgs to filter services at DB level
+    let projectIds: string[] = [];
+    if (projectId) {
+      // If specific project requested, verify user has access
+      const project = await db.query.projects.findFirst({
+        where: eq(projects.id, projectId),
+        columns: { id: true, orgId: true },
+      });
+      if (project && orgIds.includes(project.orgId)) {
+        projectIds = [project.id];
+      } else {
+        // User doesn't have access to this project
+        return NextResponse.json({
+          success: true,
+          data: [],
+          meta: { total: 0, page, per_page: perPage },
+        });
+      }
+    } else {
+      // Get all projects for user's orgs
+      const userProjects = await db.query.projects.findMany({
+        where: inArray(projects.orgId, orgIds),
+        columns: { id: true },
+      });
+      projectIds = userProjects.map(p => p.id);
+    }
+
+    if (projectIds.length === 0) {
+      return NextResponse.json({
+        success: true,
+        data: [],
+        meta: { total: 0, page, per_page: perPage },
+      });
+    }
+
+    // Build query with org filter at DB level
+    const conditions = [inArray(services.projectId, projectIds)];
+    if (serverId) {
+      conditions.push(eq(services.serverId, serverId));
+    }
+
     const serviceList = await db.query.services.findMany({
-      where: (services, { and: andWhere, eq: eqWhere }) => {
-        const conditions = [];
-        if (projectId) {
-          conditions.push(eqWhere(services.projectId, projectId));
-        }
-        if (serverId) {
-          conditions.push(eqWhere(services.serverId, serverId));
-        }
-        return conditions.length > 0 ? andWhere(...conditions) : undefined;
-      },
+      where: and(...conditions),
       orderBy: [desc(services.createdAt)],
       limit: perPage,
       offset: (page - 1) * perPage,
@@ -127,12 +158,9 @@ export async function GET(req: NextRequest) {
       },
     });
 
-    // Filter by user's orgs
-    const filteredServices = serviceList.filter((s) => orgIds.includes(s.project.orgId));
-
     return NextResponse.json({
       success: true,
-      data: filteredServices.map((s) => ({
+      data: serviceList.map((s) => ({
         id: s.id,
         project_id: s.projectId,
         server_id: s.serverId,
@@ -162,7 +190,7 @@ export async function GET(req: NextRequest) {
         updated_at: s.updatedAt?.toISOString(),
       })),
       meta: {
-        total: filteredServices.length,
+        total: serviceList.length,
         page,
         per_page: perPage,
       },

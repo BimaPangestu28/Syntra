@@ -91,28 +91,59 @@ export async function GET(req: NextRequest) {
     const shouldIncludeDeployments = !typeFilter || typeFilter.startsWith('deployment.');
 
     if (shouldIncludeDeployments) {
-      const recentDeployments = await db.query.deployments.findMany({
-        orderBy: [desc(deployments.createdAt)],
-        limit: 50,
-        with: {
-          service: {
-            columns: { id: true, name: true, projectId: true },
-            with: {
-              project: {
-                columns: { id: true, name: true, orgId: true },
-              },
+      // Get project IDs and service IDs for the user's orgs to filter at DB level
+      const userProjects = await db.query.projects.findMany({
+        where: inArray(projects.orgId, orgIds),
+        columns: { id: true },
+      });
+      const projectIds = userProjects.map(p => p.id);
+
+      if (projectIds.length === 0) {
+        // No projects, skip deployment fetching
+        activityItems.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+        const startIndex = (page - 1) * perPage;
+        const paginatedItems = activityItems.slice(startIndex, startIndex + perPage);
+        const hasMore = startIndex + perPage < activityItems.length;
+
+        return NextResponse.json({
+          success: true,
+          data: {
+            items: paginatedItems,
+            meta: {
+              page,
+              per_page: perPage,
+              has_more: hasMore,
             },
           },
-          triggeredByUser: {
-            columns: { id: true, name: true, image: true },
-          },
-        },
-      });
+        });
+      }
 
-      // Filter to only deployments belonging to the user's orgs
-      const orgDeployments = recentDeployments.filter(
-        (d) => d.service?.project?.orgId && orgIds.includes(d.service.project.orgId)
-      );
+      const userServices = await db.query.services.findMany({
+        where: inArray(services.projectId, projectIds),
+        columns: { id: true },
+      });
+      const serviceIds = userServices.map(s => s.id);
+
+      const orgDeployments = serviceIds.length > 0
+        ? await db.query.deployments.findMany({
+            where: inArray(deployments.serviceId, serviceIds),
+            orderBy: [desc(deployments.createdAt)],
+            limit: 50,
+            with: {
+              service: {
+                columns: { id: true, name: true, projectId: true },
+                with: {
+                  project: {
+                    columns: { id: true, name: true, orgId: true },
+                  },
+                },
+              },
+              triggeredByUser: {
+                columns: { id: true, name: true, image: true },
+              },
+            },
+          })
+        : [];
 
       // Existing feed IDs to avoid duplicates
       const existingIds = new Set(activityItems.map((a) => a.id));

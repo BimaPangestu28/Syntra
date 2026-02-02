@@ -17,6 +17,7 @@ import {
   AlertDescription,
   AlertTitle,
 } from '@/components/ui/alert';
+import { parseKeyValueText } from '@/lib/utils/format';
 
 import { GeneralSettings } from './_components/general-settings';
 import { GitSettings } from './_components/git-settings';
@@ -110,22 +111,7 @@ export default function ProjectSettingsPage() {
     setSaved(false);
 
     try {
-      const envVars: Record<string, string> = {};
-      if (envVarsText.trim()) {
-        envVarsText.split('\n').forEach(line => {
-          const trimmed = line.trim();
-          if (trimmed && !trimmed.startsWith('#')) {
-            const eqIndex = trimmed.indexOf('=');
-            if (eqIndex > 0) {
-              const key = trimmed.substring(0, eqIndex).trim();
-              const value = trimmed.substring(eqIndex + 1).trim();
-              if (key) {
-                envVars[key] = value;
-              }
-            }
-          }
-        });
-      }
+      const envVars = parseKeyValueText(envVarsText);
 
       const res = await fetch(`/api/v1/projects/${projectId}`, {
         method: 'PATCH',
@@ -143,7 +129,7 @@ export default function ProjectSettingsPage() {
 
       const data = await res.json();
       if (data.success) {
-        setProject({ ...project!, ...data.data });
+        if (project) setProject({ ...project, ...data.data });
         setSaved(true);
         setTimeout(() => setSaved(false), 3000);
       } else {

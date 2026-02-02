@@ -11,6 +11,8 @@ pub struct Config {
     pub api_url: Option<String>,
     pub token: Option<String>,
     pub organization_id: Option<String>,
+    pub default_org_id: Option<String>,
+    pub default_project_id: Option<String>,
 }
 
 impl Config {

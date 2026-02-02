@@ -129,8 +129,50 @@ export function MetricsExplorer({ serviceId, serverId }: MetricsExplorerProps) {
   }, [serviceId, serverId, timeRange, groupBy, selectedMetric]);
 
   useEffect(() => {
-    fetchMetrics();
-  }, [fetchMetrics]);
+    const controller = new AbortController();
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        const params = new URLSearchParams();
+
+        if (serviceId) params.set('service_id', serviceId);
+        if (serverId) params.set('server_id', serverId);
+
+        const end = new Date();
+        const start = new Date(end.getTime() - TIME_RANGES[timeRange] * 60 * 1000);
+        params.set('start', start.toISOString());
+        params.set('end', end.toISOString());
+        params.set('group_by', groupBy);
+
+        if (selectedMetric) {
+          params.set('metric_name', selectedMetric);
+        }
+
+        const res = await fetch(`/api/v1/metrics?${params}`, { signal: controller.signal });
+
+        if (controller.signal.aborted) return;
+
+        const data = await res.json();
+
+        if (!data.success) {
+          throw new Error(data.error?.message || 'Failed to fetch metrics');
+        }
+
+        setMetrics(data.data.metrics);
+        setSummary(data.data.summary);
+        setTimeSeries(data.data.time_series);
+      } catch (err) {
+        if (err instanceof DOMException && err.name === 'AbortError') return;
+        setMetrics([]);
+        setSummary([]);
+        setTimeSeries([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
+    return () => controller.abort();
+  }, [serviceId, serverId, timeRange, groupBy, selectedMetric]);
 
   // Convert time series to chart data
   const chartData = timeSeries.map((point) => ({

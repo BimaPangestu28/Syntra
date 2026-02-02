@@ -66,6 +66,50 @@ enum Commands {
         #[arg(short, long)]
         server_id: Option<String>,
     },
+
+    /// Manage environment variables
+    Env {
+        #[command(subcommand)]
+        command: commands::env::EnvCommands,
+    },
+
+    /// Manage secrets
+    Secrets {
+        #[command(subcommand)]
+        command: commands::secrets::SecretsCommands,
+    },
+
+    /// Manage custom domains
+    Domains {
+        #[command(subcommand)]
+        command: commands::domains::DomainsCommands,
+    },
+
+    /// Scale a service
+    Scale {
+        /// Service ID
+        service_id: String,
+
+        /// Number of replicas
+        #[arg(short, long)]
+        replicas: u32,
+    },
+
+    /// Rollback a service to a previous deployment
+    Rollback {
+        /// Service ID
+        service_id: String,
+
+        /// Target deployment ID (defaults to previous)
+        #[arg(long)]
+        to_deployment: Option<String>,
+    },
+
+    /// Manage CLI context (default org, project)
+    Context {
+        #[command(subcommand)]
+        command: commands::context::ContextCommands,
+    },
 }
 
 #[tokio::main]
@@ -98,6 +142,30 @@ async fn main() -> Result<()> {
         }
         Commands::Status { server_id } => {
             commands::status::run(server_id).await
+        }
+        Commands::Env { command } => {
+            commands::env::run(command).await
+        }
+        Commands::Secrets { command } => {
+            commands::secrets::run(command).await
+        }
+        Commands::Domains { command } => {
+            commands::domains::run(command).await
+        }
+        Commands::Scale {
+            service_id,
+            replicas,
+        } => {
+            commands::scale::run(&service_id, replicas).await
+        }
+        Commands::Rollback {
+            service_id,
+            to_deployment,
+        } => {
+            commands::rollback::run(&service_id, to_deployment).await
+        }
+        Commands::Context { command } => {
+            commands::context::run(command).await
         }
     }
 }

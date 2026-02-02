@@ -1,13 +1,6 @@
-import Anthropic from '@anthropic-ai/sdk';
+import { getAnthropicClient, MODEL, MODEL_DEEP } from './client';
 import { buildSystemPrompt } from './system-prompt';
 import type { ChatMessage, ServiceContext } from './index';
-
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY || '',
-});
-
-const MODEL = 'claude-3-5-haiku-20241022';
-const MODEL_DEEP = 'claude-sonnet-4-20250514';
 
 /**
  * AI Chat for service analysis
@@ -18,7 +11,7 @@ export async function chat(
 ): Promise<string> {
   const systemPrompt = buildSystemPrompt(serviceContext);
 
-  const response = await anthropic.messages.create({
+  const response = await getAnthropicClient().messages.create({
     model: MODEL_DEEP,
     max_tokens: 2048,
     system: systemPrompt,
@@ -45,7 +38,7 @@ export async function* chatStream(
 ): AsyncGenerator<string> {
   const systemPrompt = buildSystemPrompt(serviceContext);
 
-  const stream = await anthropic.messages.stream({
+  const stream = await getAnthropicClient().messages.stream({
     model: MODEL,
     max_tokens: 2048,
     system: systemPrompt,

@@ -1,10 +1,4 @@
-import Anthropic from '@anthropic-ai/sdk';
-
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY || '',
-});
-
-const MODEL = 'claude-3-5-haiku-20241022';
+import { getAnthropicClient, MODEL } from './client';
 
 /**
  * Generate AI incident summary for alerts
@@ -42,7 +36,7 @@ Respond in JSON format:
   "severity": "low|medium|high|critical"
 }`;
 
-  const response = await anthropic.messages.create({
+  const response = await getAnthropicClient().messages.create({
     model: MODEL,
     max_tokens: 512,
     messages: [{ role: 'user', content: prompt }],

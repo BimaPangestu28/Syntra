@@ -17,7 +17,7 @@ export const authConfig: NextAuthConfig = {
   adapter: DrizzleAdapter(db, {
     usersTable: users,
     accountsTable: accounts,
-    sessionsTable: sessions,
+    sessionsTable: sessions as any,
     verificationTokensTable: verificationTokens,
   }),
   providers: [

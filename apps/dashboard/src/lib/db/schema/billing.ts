@@ -11,6 +11,7 @@ import {
 import { usageTypeEnum, billingPlanEnum } from './enums';
 import { organizations, services, servers } from './core';
 import { deployments } from './deployments';
+import { managedDatabases } from './infrastructure';
 
 export const usageRecords = pgTable('usage_records', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -111,7 +112,7 @@ export const costRecords = pgTable('cost_records', {
     .references(() => organizations.id, { onDelete: 'cascade' }),
   serviceId: uuid('service_id').references(() => services.id, { onDelete: 'set null' }),
   serverId: uuid('server_id').references(() => servers.id, { onDelete: 'set null' }),
-  databaseId: uuid('database_id'), // Forward reference, can't use references() here
+  databaseId: uuid('database_id').references(() => managedDatabases.id, { onDelete: 'set null' }),
   category: varchar('category', { length: 100 }).notNull(),
   description: text('description'),
   amount: integer('amount').notNull(),

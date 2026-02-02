@@ -103,4 +103,55 @@ impl ApiClient {
 
         body.data.context("Empty response from API")
     }
+
+    /// PATCH request
+    pub async fn patch<T: DeserializeOwned, B: serde::Serialize>(
+        &self,
+        path: &str,
+        body: &B,
+    ) -> Result<T> {
+        let url = format!("{}/api/v1{}", self.base_url, path);
+        let response = self
+            .client
+            .patch(&url)
+            .json(body)
+            .send()
+            .await
+            .with_context(|| format!("Failed to connect to {}", url))?;
+
+        let status = response.status();
+        let body: ApiResponse<T> = response.json().await?;
+
+        if !body.success {
+            if let Some(err) = body.error {
+                bail!("[{}] {}", err.code, err.message);
+            }
+            bail!("API request failed with status {}", status);
+        }
+
+        body.data.context("Empty response from API")
+    }
+
+    /// DELETE request
+    pub async fn delete<T: DeserializeOwned>(&self, path: &str) -> Result<T> {
+        let url = format!("{}/api/v1{}", self.base_url, path);
+        let response = self
+            .client
+            .delete(&url)
+            .send()
+            .await
+            .with_context(|| format!("Failed to connect to {}", url))?;
+
+        let status = response.status();
+        let body: ApiResponse<T> = response.json().await?;
+
+        if !body.success {
+            if let Some(err) = body.error {
+                bail!("[{}] {}", err.code, err.message);
+            }
+            bail!("API request failed with status {}", status);
+        }
+
+        body.data.context("Empty response from API")
+    }
 }

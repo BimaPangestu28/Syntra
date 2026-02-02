@@ -7,6 +7,7 @@ import {
   boolean,
   jsonb,
   integer,
+  index,
 } from 'drizzle-orm/pg-core';
 import { userRoleEnum, serverStatusEnum, runtimeEnum, archEnum, serviceTypeEnum, sourceTypeEnum } from './enums';
 import { users } from './auth';
@@ -16,7 +17,7 @@ export const organizations = pgTable('organizations', {
   name: varchar('name', { length: 255 }).notNull(),
   slug: varchar('slug', { length: 255 }).notNull().unique(),
   logo: text('logo'),
-  ownerId: uuid('owner_id').references(() => users.id),
+  ownerId: uuid('owner_id').notNull().references(() => users.id),
   stripeCustomerId: varchar('stripe_customer_id', { length: 255 }),
   stripeSubscriptionId: varchar('stripe_subscription_id', { length: 255 }),
   plan: varchar('plan', { length: 50 }).default('free').notNull(),
@@ -37,7 +38,11 @@ export const organizationMembers = pgTable('organization_members', {
   invitedAt: timestamp('invited_at', { mode: 'date' }),
   acceptedAt: timestamp('accepted_at', { mode: 'date' }),
   createdAt: timestamp('created_at', { mode: 'date' }).defaultNow().notNull(),
-});
+}, (table) => [
+  index('idx_org_members_user_id').on(table.userId),
+  index('idx_org_members_org_id').on(table.orgId),
+  index('idx_org_members_user_org').on(table.userId, table.orgId),
+]);
 
 export const servers = pgTable('servers', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -64,7 +69,9 @@ export const servers = pgTable('servers', {
   metadata: jsonb('metadata').$type<Record<string, unknown>>(),
   createdAt: timestamp('created_at', { mode: 'date' }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { mode: 'date' }).defaultNow().notNull(),
-});
+}, (table) => [
+  index('idx_servers_org_id').on(table.orgId),
+]);
 
 export const projects = pgTable('projects', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -85,7 +92,9 @@ export const projects = pgTable('projects', {
   envVars: jsonb('env_vars').$type<Record<string, string>>().default({}),
   createdAt: timestamp('created_at', { mode: 'date' }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { mode: 'date' }).defaultNow().notNull(),
-});
+}, (table) => [
+  index('idx_projects_org_id').on(table.orgId),
+]);
 
 export const services = pgTable('services', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -120,4 +129,7 @@ export const services = pgTable('services', {
   isActive: boolean('is_active').default(true),
   createdAt: timestamp('created_at', { mode: 'date' }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { mode: 'date' }).defaultNow().notNull(),
-});
+}, (table) => [
+  index('idx_services_project_id').on(table.projectId),
+  index('idx_services_server_id').on(table.serverId),
+]);

@@ -90,7 +90,7 @@ export function EnvEditor({
     });
   }, []);
 
-  const handleAddEnvVar = async () => {
+  const handleAddEnvVar = async (signal?: AbortSignal) => {
     if (!newKey.trim()) {
       setError('Key is required');
       return;
@@ -114,7 +114,10 @@ export function EnvEditor({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ env_vars: [{ key: newKey, value: newValue }] }),
+        signal,
       });
+
+      if (signal?.aborted) return;
 
       const data = await res.json();
       if (data.success) {
@@ -128,13 +131,14 @@ export function EnvEditor({
         setError(data.error?.message || 'Failed to add environment variable');
       }
     } catch (e) {
+      if (e instanceof DOMException && e.name === 'AbortError') return;
       setError('Failed to add environment variable');
     } finally {
       setSaving(false);
     }
   };
 
-  const handleUpdateEnvVar = async (key: string) => {
+  const handleUpdateEnvVar = async (key: string, signal?: AbortSignal) => {
     setSaving(true);
     setError(null);
 
@@ -143,7 +147,10 @@ export function EnvEditor({
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ env_vars: [{ key, value: editValue }] }),
+        signal,
       });
+
+      if (signal?.aborted) return;
 
       const data = await res.json();
       if (data.success) {
@@ -156,13 +163,14 @@ export function EnvEditor({
         setError(data.error?.message || 'Failed to update environment variable');
       }
     } catch (e) {
+      if (e instanceof DOMException && e.name === 'AbortError') return;
       setError('Failed to update environment variable');
     } finally {
       setSaving(false);
     }
   };
 
-  const handleDeleteEnvVar = async (key: string) => {
+  const handleDeleteEnvVar = async (key: string, signal?: AbortSignal) => {
     const ok = await confirm({ title: 'Delete Variable', description: `Are you sure you want to delete ${key}?`, confirmLabel: 'Delete', variant: 'destructive' });
     if (!ok) return;
 
@@ -172,7 +180,10 @@ export function EnvEditor({
     try {
       const res = await fetch(`/api/v1/services/${serviceId}/env?keys=${encodeURIComponent(key)}`, {
         method: 'DELETE',
+        signal,
       });
+
+      if (signal?.aborted) return;
 
       const data = await res.json();
       if (data.success) {
@@ -183,13 +194,14 @@ export function EnvEditor({
         setError(data.error?.message || 'Failed to delete environment variable');
       }
     } catch (e) {
+      if (e instanceof DOMException && e.name === 'AbortError') return;
       setError('Failed to delete environment variable');
     } finally {
       setSaving(false);
     }
   };
 
-  const handleBulkImport = async () => {
+  const handleBulkImport = async (signal?: AbortSignal) => {
     const lines = bulkInput.split('\n').filter((line) => line.trim() && !line.startsWith('#'));
     const newVars: Array<{ key: string; value: string }> = [];
 
@@ -223,7 +235,10 @@ export function EnvEditor({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ env_vars: newVars }),
+        signal,
       });
+
+      if (signal?.aborted) return;
 
       const data = await res.json();
       if (data.success) {
@@ -236,6 +251,7 @@ export function EnvEditor({
         setError(data.error?.message || 'Failed to import environment variables');
       }
     } catch (e) {
+      if (e instanceof DOMException && e.name === 'AbortError') return;
       setError('Failed to import environment variables');
     } finally {
       setSaving(false);
@@ -300,7 +316,7 @@ export function EnvEditor({
                   <Button variant="outline" onClick={() => setIsBulkDialogOpen(false)}>
                     Cancel
                   </Button>
-                  <Button onClick={handleBulkImport} disabled={saving || !bulkInput.trim()}>
+                  <Button onClick={() => handleBulkImport()} disabled={saving || !bulkInput.trim()}>
                     {saving ? 'Importing...' : 'Import'}
                   </Button>
                 </DialogFooter>
@@ -353,7 +369,7 @@ export function EnvEditor({
                   <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
                     Cancel
                   </Button>
-                  <Button onClick={handleAddEnvVar} disabled={saving}>
+                  <Button onClick={() => handleAddEnvVar()} disabled={saving}>
                     {saving ? 'Adding...' : 'Add'}
                   </Button>
                 </DialogFooter>
@@ -417,6 +433,7 @@ export function EnvEditor({
                           size="sm"
                           onClick={() => handleUpdateEnvVar(env.key)}
                           disabled={saving}
+                          aria-label={`Save ${env.key}`}
                         >
                           <Save className="h-4 w-4" />
                         </Button>
@@ -445,6 +462,7 @@ export function EnvEditor({
                             variant="ghost"
                             size="sm"
                             onClick={() => toggleSecretVisibility(env.key)}
+                            aria-label={visibleSecrets.has(env.key) ? "Hide secret value" : "Show secret value"}
                           >
                             {visibleSecrets.has(env.key) ? (
                               <EyeOff className="h-4 w-4" />
@@ -466,12 +484,14 @@ export function EnvEditor({
                             setEditingKey(env.key);
                             setEditValue(env.value);
                           }}
+                          aria-label={`Edit ${env.key}`}
                         >
                           <Edit2 className="h-4 w-4" />
                         </Button>
                         <Button
                           variant="ghost"
                           size="sm"
+                          aria-label={`Delete ${env.key}`}
                           onClick={() => handleDeleteEnvVar(env.key)}
                         >
                           <Trash2 className="h-4 w-4 text-destructive" />

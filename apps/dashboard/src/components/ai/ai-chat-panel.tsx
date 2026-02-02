@@ -70,7 +70,7 @@ export function AIChatPanel({
     }
   }, [isOpen]);
 
-  const sendMessage = async (content: string) => {
+  const sendMessage = async (content: string, signal?: AbortSignal) => {
     if (!content.trim() || isLoading) return;
 
     const userMessage: Message = {
@@ -96,7 +96,10 @@ export function AIChatPanel({
           service_id: selectedServiceId,
           stream: true,
         }),
+        signal,
       });
+
+      if (signal?.aborted) return;
 
       if (!response.ok) {
         throw new Error('Failed to send message');
@@ -110,6 +113,11 @@ export function AIChatPanel({
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
+
+          if (signal?.aborted) {
+            reader.cancel();
+            return;
+          }
 
           const chunk = decoder.decode(value);
           const lines = chunk.split('\n');
@@ -142,7 +150,8 @@ export function AIChatPanel({
 
       setMessages((prev) => [...prev, assistantMessage]);
       setStreamingContent('');
-    } catch {
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') return;
       const errorMessage: Message = {
         id: crypto.randomUUID(),
         role: 'assistant',
@@ -184,10 +193,10 @@ export function AIChatPanel({
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="ghost" size="icon" onClick={clearChat} title="Clear chat">
+          <Button variant="ghost" size="icon" onClick={clearChat} title="Clear chat" aria-label="Clear chat">
             <Trash2 className="w-4 h-4" />
           </Button>
-          <Button variant="ghost" size="icon" onClick={onClose}>
+          <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close chat">
             <X className="w-4 h-4" />
           </Button>
         </div>
@@ -267,7 +276,7 @@ export function AIChatPanel({
             disabled={isLoading}
             className="flex-1"
           />
-          <Button type="submit" disabled={isLoading || !input.trim()} size="icon">
+          <Button type="submit" disabled={isLoading || !input.trim()} size="icon" aria-label="Send message">
             {isLoading ? (
               <Loader2 className="w-4 h-4 animate-spin" />
             ) : (

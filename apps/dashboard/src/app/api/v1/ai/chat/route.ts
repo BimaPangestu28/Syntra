@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/db';
+import { rateLimiters } from '@/lib/utils/rate-limit';
 import {
   services,
   deployments,
@@ -13,6 +14,8 @@ import {
   volumes,
   alerts,
   projects,
+  chatConversations,
+  chatMessages as chatMessages_table,
 } from '@/lib/db/schema';
 import { eq, and, desc, gte, sql } from 'drizzle-orm';
 import { chat, chatStream, ChatMessage, ServiceContext } from '@/lib/ai';
@@ -29,14 +32,55 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Rate limit AI requests
+    const rl = rateLimiters.ai(session.user.id);
+    if (!rl.success) {
+      return NextResponse.json(
+        { success: false, error: { code: 'RATE_LIMITED', message: 'Too many AI requests. Please try again later.', request_id: crypto.randomUUID() } },
+        { status: 429, headers: { 'Retry-After': String(Math.ceil((rl.resetAt - Date.now()) / 1000)) } }
+      );
+    }
+
     const body = await req.json();
-    const { messages, service_id, stream = false } = body;
+    const { messages, service_id, stream = false, conversation_id } = body;
 
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
       return NextResponse.json(
         { success: false, error: { code: 'VALIDATION_ERROR', message: 'messages array is required', request_id: crypto.randomUUID() } },
         { status: 400 }
       );
+    }
+
+    // Validate message format and size
+    const MAX_MESSAGES = 50;
+    const MAX_MESSAGE_LENGTH = 10000;
+
+    if (messages.length > MAX_MESSAGES) {
+      return NextResponse.json(
+        { success: false, error: { code: 'VALIDATION_ERROR', message: `Maximum ${MAX_MESSAGES} messages allowed`, request_id: crypto.randomUUID() } },
+        { status: 400 }
+      );
+    }
+
+    for (const msg of messages) {
+      if (!msg.role || !msg.content || typeof msg.content !== 'string') {
+        return NextResponse.json(
+          { success: false, error: { code: 'VALIDATION_ERROR', message: 'Each message must have role and content', request_id: crypto.randomUUID() } },
+          { status: 400 }
+        );
+      }
+      if (msg.content.length > MAX_MESSAGE_LENGTH) {
+        return NextResponse.json(
+          { success: false, error: { code: 'VALIDATION_ERROR', message: `Message content exceeds maximum length of ${MAX_MESSAGE_LENGTH}`, request_id: crypto.randomUUID() } },
+          { status: 400 }
+        );
+      }
+      if (msg.role !== 'user' && msg.role !== 'assistant') {
+        return NextResponse.json(
+          { success: false, error: { code: 'VALIDATION_ERROR', message: 'Message role must be "user" or "assistant"', request_id: crypto.randomUUID() } },
+          { status: 400 }
+        );
+      }
     }
 
     // Build service context if service_id provided
@@ -245,6 +289,27 @@ export async function POST(req: NextRequest) {
     // Non-streaming response
     const response = await chat(chatMessages, serviceContext);
 
+    // Persist messages if conversation_id is provided
+    if (conversation_id) {
+      const lastUserMessage = chatMessages[chatMessages.length - 1];
+      if (lastUserMessage) {
+        await db.insert(chatMessages_table).values({
+          conversationId: conversation_id,
+          role: 'user',
+          content: lastUserMessage.content,
+        });
+      }
+      await db.insert(chatMessages_table).values({
+        conversationId: conversation_id,
+        role: 'assistant',
+        content: response,
+      });
+      await db
+        .update(chatConversations)
+        .set({ updatedAt: new Date() })
+        .where(eq(chatConversations.id, conversation_id));
+    }
+
     return NextResponse.json({
       success: true,
       data: {
@@ -253,6 +318,7 @@ export async function POST(req: NextRequest) {
           content: response,
         },
         service_id,
+        conversation_id,
       },
     });
   } catch (error) {

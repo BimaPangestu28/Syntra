@@ -56,6 +56,26 @@ export default function TeamPage() {
     }
   }
 
+  async function handleResendInvite(memberId: string) {
+    setActionLoading(memberId);
+    try {
+      const res = await fetch(`/api/v1/team/${memberId}/resend`, {
+        method: 'POST',
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast.success('Invitation resent');
+      } else {
+        toast.error(data.error?.message || 'Failed to resend invitation');
+      }
+    } catch (error) {
+      console.error('Failed to resend invitation:', error);
+      toast.error('Failed to resend invitation');
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
   async function handleRemoveMember(memberId: string) {
     const ok = await confirm({ title: 'Remove Member', description: 'Are you sure you want to remove this member?', confirmLabel: 'Remove', variant: 'destructive' });
     if (!ok) return;
@@ -165,7 +185,7 @@ export default function TeamPage() {
         onChangeRole={handleChangeRole}
         onRemoveMember={handleRemoveMember}
         onLeaveOrg={handleLeaveOrg}
-        onOpenInvite={() => {}}
+        onResendInvite={handleResendInvite}
       />
     </div>
   );

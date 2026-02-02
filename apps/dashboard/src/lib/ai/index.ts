@@ -1,40 +1,6 @@
-// Types - exported from barrel for use by sub-modules and consumers
-
-export interface ErrorContext {
-  stackTrace: string;
-  errorMessage: string;
-  errorType: string;
-  serviceName: string;
-  environment?: string;
-  recentChanges?: string[];
-  breadcrumbs?: Array<{ timestamp: string; message: string; category: string }>;
-  affectedUsers?: number;
-  frequency?: number;
-}
-
-export interface ErrorAnalysis {
-  rootCause: string;
-  whyNow: string;
-  suggestedFix: string;
-  severity: 'low' | 'medium' | 'high' | 'critical';
-  affectedScope: string;
-  relatedIssues?: string[];
-}
-
-export interface DockerfileContext {
-  files: Array<{ path: string; content: string }>;
-  packageManager?: string;
-  framework?: string;
-  language?: string;
-}
-
-export interface DockerfileResult {
-  dockerfile: string;
-  explanation: string;
-  buildCommand: string;
-  runCommand: string;
-  optimizations: string[];
-}
+// Re-export types from sub-modules
+export type { ErrorContext, ErrorAnalysis } from './error-analysis';
+export type { DockerfileContext, DockerfileResult } from './dockerfile';
 
 export interface ChatMessage {
   role: 'user' | 'assistant';
@@ -142,3 +108,4 @@ export { chat, chatStream } from './chat';
 export { getRecommendations } from './recommendations';
 export { generateIncidentSummary } from './incident';
 export { buildSystemPrompt } from './system-prompt';
+export { analyzeRecentErrors, analyzeMetrics, generateSuggestions } from './suggestions';

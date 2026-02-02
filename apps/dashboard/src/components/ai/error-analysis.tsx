@@ -45,7 +45,7 @@ export function ErrorAnalysis({
   const [error, setError] = useState<string | null>(null);
   const [lastAnalyzedAt, setLastAnalyzedAt] = useState<string | null>(analyzedAt || null);
 
-  const runAnalysis = async () => {
+  const runAnalysis = async (signal?: AbortSignal) => {
     setIsAnalyzing(true);
     setError(null);
 
@@ -56,7 +56,10 @@ export function ErrorAnalysis({
         body: JSON.stringify({
           error_group_id: errorGroupId,
         }),
+        signal,
       });
+
+      if (signal?.aborted) return;
 
       const data = await response.json();
 
@@ -68,6 +71,7 @@ export function ErrorAnalysis({
       setLastAnalyzedAt(data.data.analyzed_at);
       onAnalysisComplete?.(data.data.analysis);
     } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') return;
       setError(err instanceof Error ? err.message : 'Failed to analyze error');
     } finally {
       setIsAnalyzing(false);
@@ -95,7 +99,7 @@ export function ErrorAnalysis({
               </div>
             )}
             <Button
-              onClick={runAnalysis}
+              onClick={() => runAnalysis()}
               disabled={isAnalyzing}
               className="bg-white text-black hover:bg-white/90"
             >
@@ -132,7 +136,7 @@ export function ErrorAnalysis({
             <Button
               variant="ghost"
               size="sm"
-              onClick={runAnalysis}
+              onClick={() => runAnalysis()}
               disabled={isAnalyzing}
             >
               {isAnalyzing ? (

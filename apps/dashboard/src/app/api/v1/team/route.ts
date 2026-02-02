@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { users, organizations, organizationMembers } from '@/lib/db/schema';
+import { users, organizations, organizationMembers, invitationTokens } from '@/lib/db/schema';
 import { eq, and } from 'drizzle-orm';
 import { auth } from '@/lib/auth';
 import { z } from 'zod';
+import { sendInvitationEmail } from '@/lib/email';
 
 // Request schemas
 const inviteMemberSchema = z.object({
@@ -249,6 +250,28 @@ export async function POST(req: NextRequest) {
         // acceptedAt is null - pending invite
       })
       .returning();
+
+    // Generate invitation token and send email
+    const token = crypto.randomUUID();
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+
+    await db.insert(invitationTokens).values({
+      token,
+      membershipId: member.id,
+      expiresAt,
+    });
+
+    // Get org name for email
+    const org = await db.query.organizations.findFirst({
+      where: eq(organizations.id, org_id),
+    });
+
+    const inviterName = session.user.name || session.user.email || 'A team member';
+
+    // Send invitation email (fire-and-forget, don't fail the request)
+    sendInvitationEmail(email, inviterName, org?.name || 'your organization', token).catch((err) => {
+      console.error('Failed to send invitation email:', err);
+    });
 
     return NextResponse.json(
       {
