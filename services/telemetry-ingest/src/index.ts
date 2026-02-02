@@ -10,6 +10,7 @@ import { ClickHouseWriter } from './clickhouse';
 import { TracesWriter } from './writers/traces';
 import { LogsWriter } from './writers/logs';
 import { MetricsWriter } from './writers/metrics';
+import { ErrorsWriter } from './writers/errors';
 
 // Configuration from environment
 const config = {
@@ -55,6 +56,7 @@ async function main() {
   const tracesWriter = new TracesWriter(clickhouse, config.batchSize);
   const logsWriter = new LogsWriter(clickhouse, config.batchSize);
   const metricsWriter = new MetricsWriter(clickhouse, config.batchSize);
+  const errorsWriter = new ErrorsWriter(clickhouse, config.batchSize);
 
   // Initialize Redis consumer
   const consumer = new RedisConsumer({
@@ -80,6 +82,10 @@ async function main() {
     await metricsWriter.write(data);
   });
 
+  consumer.on('errors', async (data) => {
+    await errorsWriter.write(data);
+  });
+
   // Start periodic flush
   const flushInterval = setInterval(async () => {
     try {
@@ -87,6 +93,7 @@ async function main() {
         tracesWriter.flush(),
         logsWriter.flush(),
         metricsWriter.flush(),
+        errorsWriter.flush(),
       ]);
     } catch (error) {
       console.error('[Telemetry Ingest] Flush error:', error);
@@ -111,6 +118,7 @@ async function main() {
       tracesWriter.flush(),
       logsWriter.flush(),
       metricsWriter.flush(),
+      errorsWriter.flush(),
     ]);
 
     // Close connections

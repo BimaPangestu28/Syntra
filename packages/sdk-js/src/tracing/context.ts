@@ -113,54 +113,139 @@ export function createTracestate(state: Map<string, string>): string {
   return pairs.join(',');
 }
 
+// ---------------------------------------------------------------------------
+// Context storage abstraction
+// ---------------------------------------------------------------------------
+
 /**
- * Context storage for the current span
- * Uses a simple variable for sync operations
- * For async operations, consider using AsyncLocalStorage in Node.js
+ * Abstraction for storing the current span context.
+ * AsyncLocalContextStorage is used in Node.js for async-safe context propagation.
+ * SimpleContextStorage is the fallback for browsers and non-Node environments.
  */
-let currentContext: SpanContext | null = null;
+interface ContextStorage {
+  get(): SpanContext | null;
+  set(context: SpanContext | null): void;
+  run<T>(context: SpanContext, fn: () => T): T;
+  runAsync<T>(context: SpanContext, fn: () => Promise<T>): Promise<T>;
+}
+
+/**
+ * Simple storage using a module-level variable.
+ * Works for synchronous code and browsers.
+ */
+class SimpleContextStorage implements ContextStorage {
+  private current: SpanContext | null = null;
+
+  get(): SpanContext | null {
+    return this.current;
+  }
+
+  set(context: SpanContext | null): void {
+    this.current = context;
+  }
+
+  run<T>(context: SpanContext, fn: () => T): T {
+    const prev = this.current;
+    this.current = context;
+    try {
+      return fn();
+    } finally {
+      this.current = prev;
+    }
+  }
+
+  async runAsync<T>(context: SpanContext, fn: () => Promise<T>): Promise<T> {
+    const prev = this.current;
+    this.current = context;
+    try {
+      return await fn();
+    } finally {
+      this.current = prev;
+    }
+  }
+}
+
+/**
+ * AsyncLocalStorage-backed context storage for Node.js.
+ * Provides proper async context propagation under concurrent requests.
+ */
+class AsyncLocalContextStorage implements ContextStorage {
+  private als: import('node:async_hooks').AsyncLocalStorage<SpanContext | null>;
+
+  constructor(als: import('node:async_hooks').AsyncLocalStorage<SpanContext | null>) {
+    this.als = als;
+  }
+
+  get(): SpanContext | null {
+    return this.als.getStore() ?? null;
+  }
+
+  set(context: SpanContext | null): void {
+    // AsyncLocalStorage doesn't support direct set from outside a run().
+    // We use enterWith() which sets the store for the current async context.
+    this.als.enterWith(context);
+  }
+
+  run<T>(context: SpanContext, fn: () => T): T {
+    return this.als.run(context, fn);
+  }
+
+  runAsync<T>(context: SpanContext, fn: () => Promise<T>): Promise<T> {
+    return this.als.run(context, fn);
+  }
+}
+
+/**
+ * Detect environment and create the appropriate storage.
+ */
+function createContextStorage(): ContextStorage {
+  if (
+    typeof process !== 'undefined' &&
+    typeof process.versions?.node !== 'undefined'
+  ) {
+    try {
+      // Dynamic require to avoid bundler issues in browser builds
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { AsyncLocalStorage } = require('node:async_hooks');
+      return new AsyncLocalContextStorage(new AsyncLocalStorage());
+    } catch {
+      // Fallback if async_hooks is unavailable
+    }
+  }
+  return new SimpleContextStorage();
+}
+
+const contextStorage: ContextStorage = createContextStorage();
 
 /**
  * Get current span context
  */
 export function getCurrentContext(): SpanContext | null {
-  return currentContext;
+  return contextStorage.get();
 }
 
 /**
  * Set current span context
  */
 export function setCurrentContext(context: SpanContext | null): void {
-  currentContext = context;
+  contextStorage.set(context);
 }
 
 /**
  * Run a function with a specific context
  */
 export function withContext<T>(context: SpanContext, fn: () => T): T {
-  const prev = currentContext;
-  currentContext = context;
-  try {
-    return fn();
-  } finally {
-    currentContext = prev;
-  }
+  return contextStorage.run(context, fn);
 }
 
 /**
  * Async version of withContext
  */
-export async function withContextAsync<T>(
+export function withContextAsync<T>(
   context: SpanContext,
   fn: () => Promise<T>
 ): Promise<T> {
-  const prev = currentContext;
-  currentContext = context;
-  try {
-    return await fn();
-  } finally {
-    currentContext = prev;
-  }
+  return contextStorage.runAsync(context, fn);
 }
 
 /**

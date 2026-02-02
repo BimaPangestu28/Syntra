@@ -69,3 +69,17 @@ export interface HistogramBucket {
   le: number;
   count: number;
 }
+
+export interface TelemetryError {
+  timestamp: string;
+  service_id: string;
+  deployment_id: string;
+  error_type: string;
+  message: string;
+  stack_trace?: string;
+  fingerprint: string;
+  trace_id?: string;
+  span_id?: string;
+  user_id?: string;
+  attributes?: Record<string, unknown>;
+}

@@ -121,13 +121,96 @@ export class Scope implements ScopeData {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Scope ID storage abstraction (mirrors context.ts ContextStorage pattern)
+// ---------------------------------------------------------------------------
+
+interface ScopeIdStorage {
+  get(): string | null;
+  set(id: string | null): void;
+  run<T>(id: string, fn: () => T): T;
+  runAsync<T>(id: string, fn: () => Promise<T>): Promise<T>;
+}
+
+class SimpleScopeIdStorage implements ScopeIdStorage {
+  private current: string | null = null;
+
+  get(): string | null {
+    return this.current;
+  }
+
+  set(id: string | null): void {
+    this.current = id;
+  }
+
+  run<T>(id: string, fn: () => T): T {
+    const prev = this.current;
+    this.current = id;
+    try {
+      return fn();
+    } finally {
+      this.current = prev;
+    }
+  }
+
+  async runAsync<T>(id: string, fn: () => Promise<T>): Promise<T> {
+    const prev = this.current;
+    this.current = id;
+    try {
+      return await fn();
+    } finally {
+      this.current = prev;
+    }
+  }
+}
+
+class AsyncLocalScopeIdStorage implements ScopeIdStorage {
+  private als: import('node:async_hooks').AsyncLocalStorage<string | null>;
+
+  constructor(als: import('node:async_hooks').AsyncLocalStorage<string | null>) {
+    this.als = als;
+  }
+
+  get(): string | null {
+    return this.als.getStore() ?? null;
+  }
+
+  set(id: string | null): void {
+    this.als.enterWith(id);
+  }
+
+  run<T>(id: string, fn: () => T): T {
+    return this.als.run(id, fn);
+  }
+
+  runAsync<T>(id: string, fn: () => Promise<T>): Promise<T> {
+    return this.als.run(id, fn);
+  }
+}
+
+function createScopeIdStorage(): ScopeIdStorage {
+  if (
+    typeof process !== 'undefined' &&
+    typeof process.versions?.node !== 'undefined'
+  ) {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { AsyncLocalStorage } = require('node:async_hooks');
+      return new AsyncLocalScopeIdStorage(new AsyncLocalStorage());
+    } catch {
+      // Fallback
+    }
+  }
+  return new SimpleScopeIdStorage();
+}
+
 /**
- * Scope manager using AsyncLocalStorage for context propagation
+ * Scope manager with AsyncLocalStorage support for context propagation
  */
 export class ScopeManager {
   private globalScope: Scope;
   private isolationScopes: Map<string, Scope> = new Map();
-  private currentScopeId: string | null = null;
+  private scopeIdStorage: ScopeIdStorage = createScopeIdStorage();
 
   constructor(maxBreadcrumbs: number = 100) {
     this.globalScope = new Scope(maxBreadcrumbs);
@@ -137,8 +220,9 @@ export class ScopeManager {
    * Get the current active scope
    */
   getCurrentScope(): Scope {
-    if (this.currentScopeId) {
-      return this.isolationScopes.get(this.currentScopeId) ?? this.globalScope;
+    const currentScopeId = this.scopeIdStorage.get();
+    if (currentScopeId) {
+      return this.isolationScopes.get(currentScopeId) ?? this.globalScope;
     }
     return this.globalScope;
   }
@@ -158,13 +242,9 @@ export class ScopeManager {
     const scope = this.globalScope.clone();
     this.isolationScopes.set(scopeId, scope);
 
-    const prevScopeId = this.currentScopeId;
-    this.currentScopeId = scopeId;
-
     try {
-      return callback(scope);
+      return this.scopeIdStorage.run(scopeId, () => callback(scope));
     } finally {
-      this.currentScopeId = prevScopeId;
       this.isolationScopes.delete(scopeId);
     }
   }
@@ -177,13 +257,9 @@ export class ScopeManager {
     const scope = this.globalScope.clone();
     this.isolationScopes.set(scopeId, scope);
 
-    const prevScopeId = this.currentScopeId;
-    this.currentScopeId = scopeId;
-
     try {
-      return await callback(scope);
+      return await this.scopeIdStorage.runAsync(scopeId, () => callback(scope));
     } finally {
-      this.currentScopeId = prevScopeId;
       this.isolationScopes.delete(scopeId);
     }
   }
