@@ -1,8 +1,10 @@
 import { db } from '@/lib/db';
-import { servers, deployments } from '@/lib/db/schema';
+import { servers, deployments, services, alerts } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 import type { ConnectedAgent, HeartbeatPayload, RustHeartbeatPayload, WebSocketMessage } from './types';
 import crypto from 'crypto';
+import { queueNotification } from '@/lib/queue';
+import { publishEvent } from '@/lib/events/publisher';
 
 type DeploymentStatus = 'pending' | 'building' | 'deploying' | 'running' | 'stopped' | 'failed' | 'cancelled';
 
@@ -88,6 +90,62 @@ export async function handleDeployStatus(
     .where(eq(deployments.id, payload.deployment_id));
 
   console.log(`[AgentHub] Updated deployment ${payload.deployment_id} status to ${dbStatus}`);
+
+  // Queue notifications and publish events for terminal states
+  if (dbStatus === 'running' || dbStatus === 'failed') {
+    try {
+      const deployment = await db.query.deployments.findFirst({
+        where: eq(deployments.id, payload.deployment_id),
+        with: { service: { with: { project: true } } },
+      });
+
+      if (deployment) {
+        const serviceName = deployment.service?.name || 'unknown';
+        const orgId = deployment.service?.project?.orgId;
+
+        if (dbStatus === 'running') {
+          await queueNotification({
+            type: 'deployment_success',
+            deploymentId: deployment.id,
+            serviceId: deployment.serviceId,
+            message: `Deployment ${deployment.id.slice(0, 8)} for ${serviceName} succeeded`,
+            channels: ['email', 'slack'],
+          });
+
+          if (orgId) {
+            await publishEvent(orgId, 'deployment.completed', {
+              deployment_id: deployment.id,
+              service_id: deployment.serviceId,
+              service_name: serviceName,
+              trigger_type: deployment.triggerType || 'manual',
+              git_commit_sha: deployment.gitCommitSha || undefined,
+            });
+          }
+        } else if (dbStatus === 'failed') {
+          await queueNotification({
+            type: 'deployment_failed',
+            deploymentId: deployment.id,
+            serviceId: deployment.serviceId,
+            message: `Deployment ${deployment.id.slice(0, 8)} for ${serviceName} failed: ${payload.error_message || 'Unknown error'}`,
+            channels: ['email', 'slack'],
+          });
+
+          if (orgId) {
+            await publishEvent(orgId, 'deployment.failed', {
+              deployment_id: deployment.id,
+              service_id: deployment.serviceId,
+              service_name: serviceName,
+              trigger_type: deployment.triggerType || 'manual',
+              error_message: payload.error_message,
+              git_commit_sha: deployment.gitCommitSha || undefined,
+            });
+          }
+        }
+      }
+    } catch (notifyError) {
+      console.error('[AgentHub] Failed to queue notification for deploy status:', notifyError);
+    }
+  }
 }
 
 /**
@@ -171,6 +229,61 @@ export async function handleTaskResult(
   }
 
   console.log(`[AgentHub] Updated deployment ${payload.task_id} from task result`);
+
+  // Queue notifications for task results
+  try {
+    const deployment = await db.query.deployments.findFirst({
+      where: eq(deployments.id, payload.task_id),
+      with: { service: { with: { project: true } } },
+    });
+
+    if (deployment) {
+      const serviceName = deployment.service?.name || 'unknown';
+      const orgId = deployment.service?.project?.orgId;
+
+      if (payload.success) {
+        await queueNotification({
+          type: 'deployment_success',
+          deploymentId: deployment.id,
+          serviceId: deployment.serviceId,
+          message: `Deployment for ${serviceName} completed successfully`,
+          channels: ['email', 'slack'],
+        });
+
+        if (orgId) {
+          await publishEvent(orgId, 'deployment.completed', {
+            deployment_id: deployment.id,
+            service_id: deployment.serviceId,
+            service_name: serviceName,
+            trigger_type: deployment.triggerType || 'manual',
+            git_commit_sha: deployment.gitCommitSha || undefined,
+            duration_ms: payload.duration_ms,
+          });
+        }
+      } else {
+        await queueNotification({
+          type: 'deployment_failed',
+          deploymentId: deployment.id,
+          serviceId: deployment.serviceId,
+          message: `Deployment for ${serviceName} failed: ${payload.error || 'Unknown error'}`,
+          channels: ['email', 'slack'],
+        });
+
+        if (orgId) {
+          await publishEvent(orgId, 'deployment.failed', {
+            deployment_id: deployment.id,
+            service_id: deployment.serviceId,
+            service_name: serviceName,
+            trigger_type: deployment.triggerType || 'manual',
+            error_message: payload.error,
+            git_commit_sha: deployment.gitCommitSha || undefined,
+          });
+        }
+      }
+    }
+  } catch (notifyError) {
+    console.error('[AgentHub] Failed to queue notification for task result:', notifyError);
+  }
 }
 
 /**
@@ -212,8 +325,68 @@ export async function handleAlert(
   agent: ConnectedAgent,
   message: WebSocketMessage
 ): Promise<void> {
-  console.log(`[AgentHub] Alert from ${agent.serverId}:`, message.payload);
-  // TODO: Process alert, send notifications
+  const payload = message.payload as {
+    type?: string;
+    severity?: 'info' | 'warning' | 'error' | 'critical';
+    title?: string;
+    message?: string;
+    service_id?: string;
+    metadata?: Record<string, unknown>;
+  };
+
+  console.log(`[AgentHub] Alert from ${agent.serverId}:`, payload);
+
+  try {
+    // Look up the server to get org ID
+    const server = await db.query.servers.findFirst({
+      where: eq(servers.id, agent.serverId),
+      columns: { orgId: true },
+    });
+
+    if (!server) return;
+
+    // Create alert record
+    const [alert] = await db
+      .insert(alerts)
+      .values({
+        orgId: server.orgId,
+        serverId: agent.serverId,
+        serviceId: payload.service_id || null,
+        type: payload.type || 'agent_alert',
+        severity: payload.severity || 'warning',
+        status: 'active',
+        title: payload.title || 'Agent Alert',
+        message: payload.message || 'Alert received from agent',
+        metadata: payload.metadata,
+      })
+      .returning();
+
+    // Queue notification
+    await queueNotification({
+      type: 'alert',
+      serverId: agent.serverId,
+      serviceId: payload.service_id || undefined,
+      message: `${(payload.severity || 'warning').toUpperCase()}: ${payload.title || 'Agent Alert'} - ${payload.message || ''}`,
+      channels: ['email', 'slack'],
+    });
+
+    // Publish webhook event
+    await publishEvent(server.orgId, 'alert.fired', {
+      alert_id: alert.id,
+      rule_id: '',
+      rule_name: payload.title || 'Agent Alert',
+      severity: payload.severity || 'warning',
+      metric: payload.type || 'agent_alert',
+      metric_value: 0,
+      threshold: 0,
+      operator: 'eq',
+      service_id: payload.service_id,
+    });
+
+    console.log(`[AgentHub] Alert created: ${alert.id}`);
+  } catch (error) {
+    console.error('[AgentHub] Failed to process alert:', error);
+  }
 }
 
 /**

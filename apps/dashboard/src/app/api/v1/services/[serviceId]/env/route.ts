@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { services, organizationMembers } from '@/lib/db/schema';
 import { eq, and } from 'drizzle-orm';
 import { auth } from '@/lib/auth';
+import { checkPermission } from '@/lib/auth/require-permission';
 import crypto from 'crypto';
 
 // Helper to check org access
@@ -157,11 +158,11 @@ export async function POST(
       );
     }
 
-    // Check org access - need at least developer role to edit
-    const access = await checkOrgAccess(session.user.id, service.project.orgId, ['owner', 'admin', 'developer']);
+    // Check env:write permission
+    const access = await checkPermission(session.user.id, service.project.orgId, 'env:write');
     if (!access) {
       return NextResponse.json(
-        { success: false, error: { code: 'FORBIDDEN', message: 'Access denied', request_id: crypto.randomUUID() } },
+        { success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions: env:write required', request_id: crypto.randomUUID() } },
         { status: 403 }
       );
     }
@@ -322,11 +323,11 @@ export async function DELETE(
       );
     }
 
-    // Check org access
-    const access = await checkOrgAccess(session.user.id, service.project.orgId, ['owner', 'admin', 'developer']);
-    if (!access) {
+    // Check env:write permission
+    const deleteAccess = await checkPermission(session.user.id, service.project.orgId, 'env:write');
+    if (!deleteAccess) {
       return NextResponse.json(
-        { success: false, error: { code: 'FORBIDDEN', message: 'Access denied', request_id: crypto.randomUUID() } },
+        { success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions: env:write required', request_id: crypto.randomUUID() } },
         { status: 403 }
       );
     }

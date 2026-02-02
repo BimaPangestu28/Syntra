@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { services, projects, organizationMembers } from '@/lib/db/schema';
 import { eq, and } from 'drizzle-orm';
 import { auth } from '@/lib/auth';
+import { checkPermission } from '@/lib/auth/require-permission';
 import crypto from 'crypto';
 import { z } from 'zod';
 
@@ -178,11 +179,11 @@ export async function PATCH(
       );
     }
 
-    // Check org access
-    const access = await checkOrgAccess(session.user.id, service.project.orgId, ['owner', 'admin', 'developer']);
+    // Check permission for service updates
+    const access = await checkPermission(session.user.id, service.project.orgId, 'service:deploy');
     if (!access) {
       return NextResponse.json(
-        { success: false, error: { code: 'FORBIDDEN', message: 'Access denied', request_id: crypto.randomUUID() } },
+        { success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions: service:deploy required', request_id: crypto.randomUUID() } },
         { status: 403 }
       );
     }
@@ -320,11 +321,11 @@ export async function DELETE(
       );
     }
 
-    // Check org access
-    const access = await checkOrgAccess(session.user.id, service.project.orgId, ['owner', 'admin']);
-    if (!access) {
+    // Check permission for service deletion
+    const deleteAccess = await checkPermission(session.user.id, service.project.orgId, 'service:delete');
+    if (!deleteAccess) {
       return NextResponse.json(
-        { success: false, error: { code: 'FORBIDDEN', message: 'Access denied', request_id: crypto.randomUUID() } },
+        { success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions: service:delete required', request_id: crypto.randomUUID() } },
         { status: 403 }
       );
     }

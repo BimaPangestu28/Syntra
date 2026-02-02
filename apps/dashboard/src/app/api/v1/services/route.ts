@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { services, projects, organizationMembers } from '@/lib/db/schema';
 import { eq, and, desc, inArray } from 'drizzle-orm';
 import { auth } from '@/lib/auth';
+import { checkPermission } from '@/lib/auth/require-permission';
 import crypto from 'crypto';
 import { z } from 'zod';
 
@@ -245,10 +246,10 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const access = await checkOrgAccess(session.user.id, project.orgId, ['owner', 'admin', 'developer']);
+    const access = await checkPermission(session.user.id, project.orgId, 'service:create');
     if (!access) {
       return NextResponse.json(
-        { success: false, error: { code: 'FORBIDDEN', message: 'Access denied', request_id: crypto.randomUUID() } },
+        { success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions: service:create required', request_id: crypto.randomUUID() } },
         { status: 403 }
       );
     }

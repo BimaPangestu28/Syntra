@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { organizationMembers } from '@/lib/db/schema';
 import { eq, and } from 'drizzle-orm';
 import { auth } from '@/lib/auth';
+import { checkPermission } from '@/lib/auth/require-permission';
 import { z } from 'zod';
 
 // Request schemas
@@ -191,11 +192,11 @@ export async function DELETE(
     const isSelf = targetMember.userId === session.user.id;
 
     if (!isSelf) {
-      // Only owner/admin can remove others
-      const access = await checkOrgAccess(session.user.id, targetMember.orgId, ['owner', 'admin']);
-      if (!access) {
+      // Check org:members:remove permission
+      const removeAccess = await checkPermission(session.user.id, targetMember.orgId, 'org:members:remove');
+      if (!removeAccess) {
         return NextResponse.json(
-          { success: false, error: { code: 'FORBIDDEN', message: 'Only owners and admins can remove members', request_id: crypto.randomUUID() } },
+          { success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions: org:members:remove required', request_id: crypto.randomUUID() } },
           { status: 403 }
         );
       }

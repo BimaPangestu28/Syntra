@@ -1,5 +1,5 @@
 import { db } from '@/lib/db';
-import { workflows } from '@/lib/db/schema';
+import { workflows, promotions } from '@/lib/db/schema';
 import { eq, and, desc } from 'drizzle-orm';
 import { executeAction, ActionType, WorkflowContext } from './actions';
 
@@ -49,9 +49,53 @@ export async function executeWorkflow(
   const results: ActionResult[] = [];
   let allSuccess = true;
 
-  for (const action of actions) {
+  for (let i = 0; i < actions.length; i++) {
+    const action = actions[i];
     try {
       const result = await executeAction(action.type, action.config, context, workflow.orgId);
+
+      // Check if this is an approval gate that requires pausing
+      const resultData = result.data as { status?: string; promotionId?: string } | undefined;
+      if (action.type === 'approval' && resultData?.status === 'waiting_approval') {
+        results.push({
+          action: action.type,
+          success: true,
+          message: result.message,
+          data: {
+            ...resultData,
+            paused: true,
+            paused_at_step: i,
+            remaining_actions: actions.length - i - 1,
+          },
+        });
+
+        // Save workflow run state for resumption
+        // Store paused state in the promotion's metadata
+        if (resultData.promotionId) {
+          await db
+            .update(promotions)
+            .set({
+              metadata: {
+                workflow_approval: true,
+                workflow_id: workflowId,
+                paused_at_step: i + 1, // Resume from next step
+                context,
+                remaining_actions: actions.slice(i + 1),
+              },
+            })
+            .where(eq(promotions.id, resultData.promotionId));
+        }
+
+        // Return early — workflow is paused
+        return {
+          workflowId,
+          success: true,
+          actions: results,
+          executedAt: new Date().toISOString(),
+          duration: Date.now() - startTime,
+        };
+      }
+
       results.push({
         action: action.type,
         success: true,
@@ -221,6 +265,92 @@ export async function triggerMetricWorkflows(
     trigger: 'metric',
     ...metricContext,
   });
+}
+
+/**
+ * Resume a paused workflow run after approval.
+ * Reads the saved state from the promotion record and continues execution.
+ */
+export async function resumeWorkflowRun(promotionId: string): Promise<ExecutionResult | null> {
+  const promotion = await db.query.promotions.findFirst({
+    where: eq(promotions.id, promotionId),
+  });
+
+  if (!promotion) {
+    console.error(`[Workflow] Promotion ${promotionId} not found for resume`);
+    return null;
+  }
+
+  const metadata = promotion.metadata as {
+    workflow_approval?: boolean;
+    workflow_id?: string;
+    paused_at_step?: number;
+    context?: WorkflowContext;
+    remaining_actions?: Array<{ type: ActionType; config: Record<string, unknown> }>;
+  } | null;
+
+  if (!metadata?.workflow_approval || !metadata.workflow_id || !metadata.remaining_actions) {
+    console.error(`[Workflow] Promotion ${promotionId} does not contain workflow resume state`);
+    return null;
+  }
+
+  const workflow = await db.query.workflows.findFirst({
+    where: eq(workflows.id, metadata.workflow_id),
+  });
+
+  if (!workflow) {
+    console.error(`[Workflow] Workflow ${metadata.workflow_id} not found`);
+    return null;
+  }
+
+  console.log(
+    `[Workflow] Resuming workflow "${workflow.name}" from step ${metadata.paused_at_step}, ${metadata.remaining_actions.length} actions remaining`
+  );
+
+  const context = metadata.context || { trigger: 'manual' };
+  const startTime = Date.now();
+  const results: ActionResult[] = [];
+  let allSuccess = true;
+
+  for (const action of metadata.remaining_actions) {
+    try {
+      const result = await executeAction(action.type, action.config, context, workflow.orgId);
+      results.push({
+        action: action.type,
+        success: true,
+        message: result.message,
+        data: result.data,
+      });
+    } catch (error) {
+      allSuccess = false;
+      results.push({
+        action: action.type,
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+      console.error(`[Workflow] Action ${action.type} failed:`, error);
+    }
+  }
+
+  // Update promotion to deployed
+  await db
+    .update(promotions)
+    .set({
+      status: allSuccess ? 'deployed' : 'failed',
+      deployedAt: allSuccess ? new Date() : undefined,
+    })
+    .where(eq(promotions.id, promotionId));
+
+  const duration = Date.now() - startTime;
+  console.log(`[Workflow] Resumed "${workflow.name}" completed in ${duration}ms - ${allSuccess ? 'SUCCESS' : 'PARTIAL FAILURE'}`);
+
+  return {
+    workflowId: workflow.id,
+    success: allSuccess,
+    actions: results,
+    executedAt: new Date().toISOString(),
+    duration,
+  };
 }
 
 /**

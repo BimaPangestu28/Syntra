@@ -1,10 +1,10 @@
 import { db } from '@/lib/db';
-import { services, deployments, servers } from '@/lib/db/schema';
+import { services, deployments, servers, promotions } from '@/lib/db/schema';
 import { eq, desc } from 'drizzle-orm';
 import { queueNotification, queueDeployment } from '@/lib/queue';
 import { agentHub } from '@/lib/agent/hub';
 
-export type ActionType = 'notify' | 'scale' | 'restart' | 'rollback' | 'run_command' | 'ai_analyze';
+export type ActionType = 'notify' | 'scale' | 'restart' | 'rollback' | 'run_command' | 'ai_analyze' | 'approval';
 
 export interface WorkflowContext {
   trigger: string;
@@ -46,6 +46,8 @@ export async function executeAction(
       return executeRunCommandAction(config, context);
     case 'ai_analyze':
       return executeAiAnalyzeAction(config, context);
+    case 'approval':
+      return executeApprovalAction(config, context, orgId);
     default:
       throw new Error(`Unknown action type: ${type}`);
   }
@@ -256,6 +258,56 @@ async function executeAiAnalyzeAction(
   // TODO: Implement AI analysis integration
   console.log('[Workflow] AI analyze action triggered:', config, context);
   return { message: 'AI analysis queued' };
+}
+
+/**
+ * Execute approval gate action.
+ * Creates a pending promotion record and pauses the workflow until approved.
+ */
+async function executeApprovalAction(
+  config: Record<string, unknown>,
+  context: WorkflowContext,
+  orgId: string
+): Promise<ActionResult> {
+  const serviceId = (config.service_id as string) || context.serviceId;
+  const description = (config.description as string) || 'Workflow approval required';
+
+  if (!serviceId) throw new Error('service_id is required for approval action');
+
+  const service = await db.query.services.findFirst({
+    where: eq(services.id, serviceId),
+    columns: { id: true, projectId: true },
+  });
+
+  if (!service) throw new Error(`Service ${serviceId} not found`);
+
+  // Create a pending promotion record to represent the approval gate
+  const [promotion] = await db
+    .insert(promotions)
+    .values({
+      projectId: service.projectId,
+      fromEnvironmentId: (config.from_environment_id as string) || service.projectId, // fallback
+      toEnvironmentId: (config.to_environment_id as string) || service.projectId,
+      deploymentId: context.deploymentId || null,
+      status: 'pending',
+      requestedBy: context.triggeredBy || orgId,
+      metadata: {
+        workflow_approval: true,
+        description,
+        service_id: serviceId,
+        workflow_context: {
+          trigger: context.trigger,
+          serviceId: context.serviceId,
+          deploymentId: context.deploymentId,
+        },
+      },
+    })
+    .returning();
+
+  return {
+    message: `Approval gate created (${promotion.id}). Workflow paused until approved.`,
+    data: { status: 'waiting_approval', promotionId: promotion.id },
+  };
 }
 
 /**

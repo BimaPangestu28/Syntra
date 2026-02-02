@@ -9,6 +9,7 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
+  ReferenceLine,
 } from 'recharts';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
@@ -20,6 +21,14 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { BarChart3, Loader2 } from 'lucide-react';
+
+interface DeploymentMarker {
+  id: string;
+  status: string;
+  created_at: string;
+  git_commit_sha?: string;
+  trigger_type?: string;
+}
 
 interface MetricsChartsProps {
   serviceId: string;
@@ -125,6 +134,7 @@ export function MetricsCharts({ serviceId }: MetricsChartsProps) {
   const [loading, setLoading] = useState(true);
   const [metricsData, setMetricsData] = useState<Record<string, MetricDataPoint[]>>({});
   const [availableMetrics, setAvailableMetrics] = useState<MetricInfo[]>([]);
+  const [deployments, setDeployments] = useState<DeploymentMarker[]>([]);
 
   useEffect(() => {
     const fetchMetrics = async () => {
@@ -173,6 +183,19 @@ export function MetricsCharts({ serviceId }: MetricsChartsProps) {
         }
 
         setMetricsData(metricsMap);
+
+        // Fetch recent deployments for markers
+        try {
+          const deployResponse = await fetch(
+            `/api/v1/deployments?service_id=${serviceId}&limit=20`
+          );
+          const deployData = await deployResponse.json();
+          if (deployData.success && deployData.data) {
+            setDeployments(deployData.data);
+          }
+        } catch {
+          // Non-critical: don't fail metrics if deployments can't be fetched
+        }
       } catch (error) {
         console.error('Error fetching metrics:', error);
         setMetricsData({});
@@ -208,6 +231,17 @@ export function MetricsCharts({ serviceId }: MetricsChartsProps) {
       </Card>
     );
   }
+
+  const getDeployColor = (status: string) => {
+    switch (status) {
+      case 'running': return '#22c55e';
+      case 'failed': return '#ef4444';
+      case 'building':
+      case 'deploying': return '#3b82f6';
+      case 'cancelled': return '#6b7280';
+      default: return '#a855f7';
+    }
+  };
 
   const renderChart = (metricName: string) => {
     const config = METRIC_CONFIGS[metricName];
@@ -270,6 +304,35 @@ export function MetricsCharts({ serviceId }: MetricsChartsProps) {
                 fill={`url(#gradient-${metricName})`}
                 strokeWidth={2}
               />
+              {deployments.map((deploy) => {
+                const deployTime = new Date(deploy.created_at).getTime();
+                const chartStart = chartData[0]?.timestamp;
+                const chartEnd = chartData[chartData.length - 1]?.timestamp;
+                if (!chartStart || !chartEnd || deployTime < chartStart || deployTime > chartEnd) {
+                  return null;
+                }
+                // Find closest data point's displayTime for the reference line
+                const closest = chartData.reduce((prev, curr) =>
+                  Math.abs(curr.timestamp - deployTime) < Math.abs(prev.timestamp - deployTime)
+                    ? curr
+                    : prev
+                );
+                return (
+                  <ReferenceLine
+                    key={deploy.id}
+                    x={closest.displayTime}
+                    stroke={getDeployColor(deploy.status)}
+                    strokeDasharray="4 4"
+                    strokeWidth={1.5}
+                    label={{
+                      value: deploy.git_commit_sha?.slice(0, 7) || deploy.trigger_type || 'deploy',
+                      position: 'top',
+                      fill: getDeployColor(deploy.status),
+                      fontSize: 10,
+                    }}
+                  />
+                );
+              })}
             </AreaChart>
           </ResponsiveContainer>
         </CardContent>

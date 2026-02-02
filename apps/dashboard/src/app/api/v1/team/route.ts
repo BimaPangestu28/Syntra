@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { users, organizations, organizationMembers, invitationTokens } from '@/lib/db/schema';
 import { eq, and } from 'drizzle-orm';
 import { auth } from '@/lib/auth';
+import { checkPermission } from '@/lib/auth/require-permission';
 import { z } from 'zod';
 import { sendInvitationEmail } from '@/lib/email';
 
@@ -166,11 +167,11 @@ export async function POST(req: NextRequest) {
 
     const { org_id, email, role } = parsed.data;
 
-    // Only owner/admin can invite
-    const access = await checkOrgAccess(session.user.id, org_id, ['owner', 'admin']);
+    // Check org:members:invite permission
+    const access = await checkPermission(session.user.id, org_id, 'org:members:invite');
     if (!access) {
       return NextResponse.json(
-        { success: false, error: { code: 'FORBIDDEN', message: 'Only owners and admins can invite members', request_id: crypto.randomUUID() } },
+        { success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions: org:members:invite required', request_id: crypto.randomUUID() } },
         { status: 403 }
       );
     }

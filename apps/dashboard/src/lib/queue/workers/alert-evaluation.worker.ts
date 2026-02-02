@@ -5,6 +5,7 @@ import { alertRules, alerts } from '@/lib/db/schema';
 import { eq, and, lt, gt } from 'drizzle-orm';
 import { queryMetrics } from '@/lib/clickhouse/client';
 import { queueNotification } from '@/lib/queue';
+import { publishEvent } from '@/lib/events/publisher';
 
 // Redis connection
 const getRedisConnection = () => {
@@ -196,6 +197,26 @@ async function processAlertEvaluation(
             .update(alertRules)
             .set({ lastTriggeredAt: new Date() })
             .where(eq(alertRules.id, rule.id));
+
+          // Publish webhook event for alert.fired
+          try {
+            await publishEvent(rule.orgId, 'alert.fired', {
+              alert_id: alert.id,
+              rule_id: rule.id,
+              rule_name: rule.name,
+              severity: rule.severity,
+              metric: rule.metric,
+              metric_value: metricValue,
+              threshold: rule.threshold,
+              operator: rule.operator,
+              service_id: rule.serviceId || undefined,
+            });
+          } catch (publishError) {
+            console.error(
+              `[AlertEvaluation] Failed to publish alert event for rule ${rule.id}:`,
+              publishError
+            );
+          }
 
           // Queue notifications for each channel
           if (rule.channelIds && rule.channelIds.length > 0) {
