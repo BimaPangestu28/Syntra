@@ -16,6 +16,7 @@ export const QUEUE_NAMES = {
   NOTIFICATION: 'notification',
   UPTIME: 'uptime',
   AI_SUGGESTIONS: 'ai-suggestions',
+  ALERT_EVALUATION: 'alert-evaluation',
 } as const;
 
 // Job types
@@ -78,12 +79,17 @@ export interface AiSuggestionsJobData {
   orgId: string;
 }
 
+export interface AlertEvaluationJobData {
+  // Empty - periodic job that evaluates all rules
+}
+
 // Create queues
 let deploymentQueue: Queue<DeploymentJobData> | null = null;
 let buildQueue: Queue<BuildJobData> | null = null;
 let notificationQueue: Queue<NotificationJobData> | null = null;
 let uptimeQueue: Queue<UptimeJobData> | null = null;
 let aiSuggestionsQueue: Queue<AiSuggestionsJobData> | null = null;
+let alertEvaluationQueue: Queue<AlertEvaluationJobData> | null = null;
 
 export function getDeploymentQueue(): Queue<DeploymentJobData> {
   if (!deploymentQueue) {
@@ -197,6 +203,26 @@ export function getAiSuggestionsQueue(): Queue<AiSuggestionsJobData> {
   return aiSuggestionsQueue;
 }
 
+export function getAlertEvaluationQueue(): Queue<AlertEvaluationJobData> {
+  if (!alertEvaluationQueue) {
+    alertEvaluationQueue = new Queue<AlertEvaluationJobData>(QUEUE_NAMES.ALERT_EVALUATION, {
+      connection: getRedisConnection(),
+      defaultJobOptions: {
+        attempts: 1,
+        removeOnComplete: {
+          count: 100,
+          age: 3600,
+        },
+        removeOnFail: {
+          count: 100,
+          age: 24 * 3600,
+        },
+      },
+    });
+  }
+  return alertEvaluationQueue;
+}
+
 // Helper to add deployment job
 export async function queueDeployment(data: DeploymentJobData, priority: number = 0) {
   const queue = getDeploymentQueue();
@@ -242,6 +268,34 @@ export async function queueAiSuggestions(data: AiSuggestionsJobData) {
     jobId: `ai-suggest-${data.serviceId}-${Date.now()}`,
   });
   return job;
+}
+
+// Helper to add alert evaluation job (typically scheduled)
+export async function queueAlertEvaluation() {
+  const queue = getAlertEvaluationQueue();
+  const job = await queue.add('evaluate', {}, {
+    jobId: `alert-eval-${Date.now()}`,
+  });
+  return job;
+}
+
+// Schedule periodic alert evaluation (run every minute)
+export async function scheduleAlertEvaluation() {
+  const queue = getAlertEvaluationQueue();
+
+  // Add a repeatable job that runs every minute
+  await queue.add(
+    'evaluate',
+    {},
+    {
+      repeat: {
+        pattern: '* * * * *', // Every minute
+      },
+      jobId: 'alert-evaluation-repeatable',
+    }
+  );
+
+  console.log('[Queue] Alert evaluation scheduled to run every minute');
 }
 
 // Get queue stats
@@ -295,7 +349,14 @@ export async function getQueueStats() {
 
 // Cleanup function for graceful shutdown
 export async function closeQueues() {
-  const queues = [deploymentQueue, buildQueue, notificationQueue, uptimeQueue, aiSuggestionsQueue].filter(Boolean);
+  const queues = [
+    deploymentQueue,
+    buildQueue,
+    notificationQueue,
+    uptimeQueue,
+    aiSuggestionsQueue,
+    alertEvaluationQueue,
+  ].filter(Boolean);
   await Promise.all(queues.map((q) => q?.close()));
   console.log('[Queue] All queues closed');
 }

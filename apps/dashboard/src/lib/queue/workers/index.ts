@@ -3,6 +3,7 @@
 import { startBuildWorker, stopBuildWorker } from './build.worker';
 import { startDeploymentWorker, stopDeploymentWorker } from './deployment.worker';
 import { startNotificationWorker, stopNotificationWorker } from './notification.worker';
+import { createAlertEvaluationWorker, stopAlertEvaluationWorker } from './alert-evaluation.worker';
 
 let workersStarted = false;
 
@@ -25,6 +26,9 @@ export async function startAllWorkers(): Promise<void> {
       startDeploymentWorker(),
       startNotificationWorker(),
     ]);
+
+    // Start alert evaluation worker
+    createAlertEvaluationWorker();
 
     workersStarted = true;
     console.log('[Workers] All workers started successfully');
@@ -51,6 +55,7 @@ export async function stopAllWorkers(): Promise<void> {
     stopBuildWorker();
     stopDeploymentWorker();
     stopNotificationWorker();
+    stopAlertEvaluationWorker();
 
     workersStarted = false;
     console.log('[Workers] All workers stopped');
@@ -71,3 +76,4 @@ export function areWorkersRunning(): boolean {
 export { startBuildWorker, stopBuildWorker } from './build.worker';
 export { startDeploymentWorker, stopDeploymentWorker } from './deployment.worker';
 export { startNotificationWorker, stopNotificationWorker } from './notification.worker';
+export { createAlertEvaluationWorker, stopAlertEvaluationWorker } from './alert-evaluation.worker';

@@ -36,34 +36,18 @@ export interface TeamData {
 }
 
 export const roleConfig: Record<Role, { label: string; icon: React.ElementType; color: string }> = {
-  owner: { label: 'Owner', icon: Crown, color: 'bg-purple-500/10 text-purple-600 border-purple-200' },
-  admin: { label: 'Admin', icon: ShieldCheck, color: '' },
-  developer: { label: 'Developer', icon: Code, color: '' },
-  viewer: { label: 'Viewer', icon: Eye, color: '' },
-};
-
-const roleBadgeVariant: Record<Role, 'default' | 'secondary' | 'outline'> = {
-  owner: 'default',
-  admin: 'default',
-  developer: 'secondary',
-  viewer: 'outline',
+  owner: { label: 'Owner', icon: Crown, color: 'bg-amber-500/10 text-amber-700 border-amber-300 dark:text-amber-400 dark:border-amber-500/30' },
+  admin: { label: 'Admin', icon: ShieldCheck, color: 'bg-purple-500/10 text-purple-700 border-purple-300 dark:text-purple-400 dark:border-purple-500/30' },
+  developer: { label: 'Developer', icon: Code, color: 'bg-blue-500/10 text-blue-700 border-blue-300 dark:text-blue-400 dark:border-blue-500/30' },
+  viewer: { label: 'Viewer', icon: Eye, color: 'bg-zinc-500/10 text-zinc-600 border-zinc-300 dark:text-zinc-400 dark:border-zinc-500/30' },
 };
 
 export function RoleBadge({ role }: { role: Role }) {
   const config = roleConfig[role];
   const Icon = config.icon;
 
-  if (role === 'owner') {
-    return (
-      <Badge className={`${config.color} gap-1`}>
-        <Icon className="h-3 w-3" />
-        {config.label}
-      </Badge>
-    );
-  }
-
   return (
-    <Badge variant={roleBadgeVariant[role]} className="gap-1">
+    <Badge variant="outline" className={`${config.color} gap-1 font-medium`}>
       <Icon className="h-3 w-3" />
       {config.label}
     </Badge>
